@@ -3,9 +3,14 @@ import threading
 from flask import Flask, jsonify, render_template_string
 
 # Import the worker function from your renamed script
-from bse_monitor_worker import start_bse_monitor_worker, log_message, MONITORED_SCRIPTS_FILE
+from bse_monitor_worker import start_bse_monitor_worker, log_message
 import pandas as pd # Needed to load initial CSV for the worker
 import json # Needed to load initial JSON for the worker
+
+# --- Configuration ---
+# File to list the scrip codes and names to monitor.
+# This file is now defined directly in app.py
+MONITORED_SCRIPTS_FILE = 'monitored_scripts.csv' 
 
 app = Flask(__name__)
 
