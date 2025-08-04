@@ -5,9 +5,10 @@ import time
 import requests
 from datetime import datetime, timedelta
 import schedule
-import random
+import random # For exponential backoff jitter
 import pandas as pd
 from flask import Flask, request, jsonify, render_template_string, url_for, redirect
+from rapidfuzz import process # Import rapidfuzz for fuzzy matching
 
 # --- Global Configuration ---
 # File to store the monitored scrip codes and Telegram chat IDs
@@ -30,7 +31,7 @@ TELEGRAM_RETRY_DELAY_BASE = 5 # Base delay in seconds for exponential backoff
 # Global variables for application state
 GLOBAL_MONITORED_SCRIPS = {} # Stores scrip_code: company_name from config file
 GLOBAL_TELEGRAM_CHAT_IDS = [] # Stores a list of Telegram chat IDs
-GLOBAL_BSE_COMPANY_NAMES = [] # Stores all company names for suggestions
+GLOBAL_BSE_COMPANY_NAMES = [] # Stores all company names for suggestions (from bse_company_list_cleaned.csv)
 GLOBAL_BSE_DF = pd.DataFrame() # Stores the full BSE company list DataFrame
 
 app = Flask(__name__)
@@ -176,14 +177,22 @@ def get_bse_announcements(scrip_code, num_announcements=15):
         log_message(f"An unexpected error occurred in get_bse_announcements for {scrip_code}:\n{e}")
         return []
 
-def get_suggestions(query, limit=5):
+def get_suggestions_from_list(query, limit=5): # Renamed to avoid conflict with Flask route
     """
-    Provides company name suggestions based on a query.
-    Requires GLOBAL_BSE_DF to be loaded.
+    Provides company name suggestions based on a query using loaded data.
     """
     if not GLOBAL_BSE_DF.empty and 'Company Name' in GLOBAL_BSE_DF.columns:
-        company_names_list = GLOBAL_BSE_DF["Company Name"].tolist()
-        return process.extract(query, company_names_list, limit=limit)
+        # Use rapidfuzz's process.extract to get fuzzy matches
+        # extract returns (match, score, index)
+        matches = process.extract(query, GLOBAL_BSE_DF["Company Name"].tolist(), limit=limit)
+        
+        results = []
+        for match_name, score, index in matches:
+            # Ensure score is above a certain threshold to avoid irrelevant suggestions
+            if score > 75: # Adjust threshold as needed (0-100)
+                bse_code = str(GLOBAL_BSE_DF.iloc[index]["BSE Code"])
+                results.append({"bse_code": bse_code, "company_name": match_name})
+        return results
     return []
 
 def load_bse_company_list():
@@ -367,6 +376,29 @@ def index():
                 .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
                 .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
                 .info-box { background-color: #e0f2f7; border-left: 5px solid #007bff; padding: 15px; margin-bottom: 20px; border-radius: 8px; font-size: 0.95em; }
+                #suggestionsList {
+                    border: 1px solid #ddd;
+                    max-height: 150px;
+                    overflow-y: auto;
+                    background-color: white;
+                    position: absolute; /* Position relative to the form or container */
+                    width: calc(100% - 30px); /* Adjust width to match input field */
+                    z-index: 1000; /* Ensure it appears above other elements */
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                    border-top: none;
+                    border-radius: 0 0 8px 8px;
+                }
+                #suggestionsList div {
+                    padding: 10px;
+                    cursor: pointer;
+                    border-bottom: 1px solid #eee;
+                }
+                #suggestionsList div:hover {
+                    background-color: #f0f0f0;
+                }
+                #suggestionsList div:last-child {
+                    border-bottom: none;
+                }
             </style>
         </head>
         <body>
@@ -376,8 +408,9 @@ def index():
 
                 <h2>Manage Monitored Scrips</h2>
                 <form id="addScripForm">
-                    <input type="text" id="bseCode" name="bse_code" placeholder="BSE Code (e.g., 500325)" required>
-                    <input type="text" id="companyName" name="company_name" placeholder="Company Name (e.g., Reliance Industries)" required>
+                    <input type="text" id="bseCode" name="bse_code" placeholder="BSE Code (e.g., 500325)" readonly>
+                    <input type="text" id="companyName" name="company_name" placeholder="Type Company Name (e.g., Reliance Industries)" oninput="getCompanySuggestions(this.value)" required>
+                    <div id="suggestionsList"></div> <!-- For suggestions -->
                     <input type="submit" value="Add Scrip">
                 </form>
 
@@ -413,6 +446,9 @@ def index():
                 const chatIdList = document.getElementById('chatIdList');
                 const addChatIdForm = document.getElementById('addChatIdForm');
                 const messageDiv = document.getElementById('message');
+                const companyNameInput = document.getElementById('companyName');
+                const bseCodeInput = document.getElementById('bseCode');
+                const suggestionsList = document.getElementById('suggestionsList');
 
                 async function fetchAndDisplayScrips() {
                     try {
@@ -454,6 +490,41 @@ def index():
                     }
                 }
 
+                async function getCompanySuggestions(query) {
+                    suggestionsList.innerHTML = '';
+                    if (query.length < 2) { // Start suggesting after 2 characters
+                        suggestionsList.style.display = 'none';
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch(`/api/suggest_company?query=${encodeURIComponent(query)}`);
+                        const suggestions = await response.json();
+
+                        if (suggestions.length > 0) {
+                            suggestionsList.style.display = 'block';
+                            suggestions.forEach(item => {
+                                const div = document.createElement('div');
+                                div.textContent = `${item.company_name} (${item.bse_code})`;
+                                div.dataset.bseCode = item.bse_code;
+                                div.dataset.companyName = item.company_name;
+                                div.addEventListener('click', () => {
+                                    companyNameInput.value = item.company_name;
+                                    bseCodeInput.value = item.bse_code;
+                                    suggestionsList.style.display = 'none';
+                                });
+                                suggestionsList.appendChild(div);
+                            });
+                        } else {
+                            suggestionsList.style.display = 'none';
+                        }
+                    } catch (error) {
+                        console.error('Error fetching suggestions:', error);
+                        suggestionsList.style.display = 'none';
+                    }
+                }
+
+
                 async function manageConfig(action, type, value1, value2 = null) {
                     let body = { action: action, type: type };
                     if (type === 'scrip') {
@@ -472,7 +543,11 @@ def index():
                         const result = await response.json();
                         if (response.ok) {
                             showMessage('success', result.message);
-                            if (type === 'scrip') addScripForm.reset();
+                            if (type === 'scrip') {
+                                addScripForm.reset();
+                                suggestionsList.innerHTML = ''; // Clear suggestions
+                                suggestionsList.style.display = 'none';
+                            }
                             if (type === 'chat_id') addChatIdForm.reset();
                             fetchAndDisplayScrips();
                         } else {
@@ -593,6 +668,16 @@ def manage_config_api():
     else:
         return jsonify({"message": "Invalid item type. Use 'scrip' or 'chat_id'."}), 400
 
+@app.route('/api/suggest_company', methods=['GET'])
+def suggest_company_api():
+    """API endpoint for fuzzy company name suggestions."""
+    query = request.args.get('query', '').strip()
+    if not query:
+        return jsonify([])
+    
+    suggestions = get_suggestions_from_list(query, limit=10) # Get up to 10 suggestions
+    return jsonify(suggestions)
+
 @app.route('/announcements', methods=['GET'])
 def view_announcements():
     """
@@ -710,3 +795,4 @@ if __name__ == '__main__':
     # Render.com provides the port via an environment variable
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
