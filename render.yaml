@@ -1,0 +1,7 @@
+services:
+  - type: worker
+    name: bse-monitor
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python monitor.py
