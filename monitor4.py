@@ -7,7 +7,7 @@ import schedule # Re-introduced for scheduling
 from fetcher import get_bse_announcements # Assuming fetcher.py is in the same directory
 
 # --- Configuration ---
-SCRIP_CODES = ['532275', '532540']  # Example: Reliance, Tata Motors
+SCRIP_CODES = ['533104', '530669']  # Example: Reliance, Tata Motors
 CACHE_FILE = "seen_announcements.json"
 LOG_FILE = "telegram_log.txt" # File to log Telegram messages
 MAX_RETRIES = 3
