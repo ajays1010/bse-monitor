@@ -2,3 +2,8 @@ requests
 pandas
 rapidfuzz
 schedule
+flask
+pandas # For reading initial CSV in app.py
+openpyxl # For reading .xlsx files if you use them for monitored_scripts.csv
+
+
