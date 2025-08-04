@@ -10,7 +10,7 @@ import pandas as pd
 from flask import Flask, request, jsonify, render_template_string, url_for, redirect
 
 # --- Global Configuration ---
-# File to store the monitored scrip codes (managed by the admin panel)
+# File to store the monitored scrip codes and Telegram chat IDs
 CONFIG_FILE = 'monitored_scripts_config.json' 
 # File to track seen announcements (used by the background worker)
 CACHE_FILE = "seen_announcements.json"
@@ -23,13 +23,13 @@ DAYS_TO_FETCH = 2 # Set to 2 to include today and the previous 2 full days (tota
 
 # Telegram settings
 TELEGRAM_BOT_TOKEN = '7527888676:AAEul4nktWJT2Bt7vciEsC9ukHfV1bTx-ck'
-TELEGRAM_CHAT_ID = '453652457'
 TELEGRAM_TIMEOUT = 15 # Increased timeout for Telegram requests (from 10 to 15 seconds)
 TELEGRAM_MAX_RETRIES = 5 # Max retries for sending a single Telegram message
 TELEGRAM_RETRY_DELAY_BASE = 5 # Base delay in seconds for exponential backoff
 
 # Global variables for application state
 GLOBAL_MONITORED_SCRIPS = {} # Stores scrip_code: company_name from config file
+GLOBAL_TELEGRAM_CHAT_IDS = [] # Stores a list of Telegram chat IDs
 GLOBAL_BSE_COMPANY_NAMES = [] # Stores all company names for suggestions
 GLOBAL_BSE_DF = pd.DataFrame() # Stores the full BSE company list DataFrame
 
@@ -44,45 +44,45 @@ def log_message(message):
         f.write(f"[{timestamp}] {message}\n")
     print(f"[LOG] {message}") # Also print to console for testing
 
-def send_telegram_message(message):
-    """Sends a message to Telegram with retry logic and logs it."""
+def send_telegram_message(chat_id, message): # Modified to accept chat_id
+    """Sends a message to a specific Telegram chat ID with retry logic and logs it."""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
+    payload = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
 
     for attempt in range(TELEGRAM_MAX_RETRIES):
         try:
             response = requests.post(url, data=payload, timeout=TELEGRAM_TIMEOUT)
             response.raise_for_status() # Raises HTTPError for bad responses (4xx or 5xx)
-            log_message(f"Telegram message sent successfully (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {message}")
+            log_message(f"Telegram message sent successfully to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {message}")
             return True # Message sent successfully
         except requests.exceptions.Timeout as e:
             delay = (TELEGRAM_RETRY_DELAY_BASE * (2 ** attempt)) + random.uniform(0, 1) # Exponential backoff with jitter
-            log_message(f"Telegram send timeout (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. Retrying in {delay:.2f} seconds.")
+            log_message(f"Telegram send timeout to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. Retrying in {delay:.2f} seconds.")
             time.sleep(delay)
         except requests.exceptions.RequestException as e:
             delay = (TELEGRAM_RETRY_DELAY_BASE * (2 ** attempt)) + random.uniform(0, 1)
-            log_message(f"Telegram request error (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. Retrying in {delay:.2f} seconds.")
+            log_message(f"Telegram request error to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. Retrying in {delay:.2f} seconds.")
             time.sleep(delay)
         except Exception as e:
-            log_message(f"Unexpected error sending Telegram message (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. No further retries for this attempt.")
+            log_message(f"Unexpected error sending Telegram message to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. No further retries for this attempt.")
             break # Break on unexpected errors not related to requests
 
-    log_message(f"Failed to send Telegram message after {TELEGRAM_MAX_RETRIES} attempts: {message}")
+    log_message(f"Failed to send Telegram message to {chat_id} after {TELEGRAM_MAX_RETRIES} attempts: {message}")
     return False # Message failed after all retries
 
 def load_config():
-    """Loads scrip codes from the JSON config file."""
+    """Loads scrip codes and chat IDs from the JSON config file."""
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r') as f:
                 return json.load(f)
         except json.JSONDecodeError:
             log_message(f"Warning: Could not decode JSON from {CONFIG_FILE}. Returning empty config.")
-            return {"scrip_codes": {}}
-    return {"scrip_codes": {}} # Default empty structure if file doesn't exist
+            return {"scrip_codes": {}, "telegram_chat_ids": []} # Ensure default includes chat_ids
+    return {"scrip_codes": {}, "telegram_chat_ids": []} # Default empty structure if file doesn't exist
 
 def save_config(config_data):
-    """Saves scrip codes to the JSON config file."""
+    """Saves scrip codes and chat IDs to the JSON config file."""
     try:
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config_data, f, indent=4)
@@ -113,7 +113,6 @@ def save_seen_ids(data):
 def get_bse_announcements(scrip_code, num_announcements=15):
     """
     Fetches recent announcements for a given scrip code from the BSE API.
-    (Copied from fetcher.py)
     """
     if not scrip_code.isdigit():
         log_message(f"Input Error: Scrip code '{scrip_code}' must be a numeric string. Skipping.")
@@ -181,7 +180,6 @@ def get_suggestions(query, limit=5):
     """
     Provides company name suggestions based on a query.
     Requires GLOBAL_BSE_DF to be loaded.
-    (Copied from fetcher.py)
     """
     if not GLOBAL_BSE_DF.empty and 'Company Name' in GLOBAL_BSE_DF.columns:
         company_names_list = GLOBAL_BSE_DF["Company Name"].tolist()
@@ -191,7 +189,6 @@ def get_suggestions(query, limit=5):
 def load_bse_company_list():
     """
     Loads the BSE company list for suggestions.
-    (Adapted from fetcher.py)
     """
     global GLOBAL_BSE_DF, GLOBAL_BSE_COMPANY_NAMES
     bse_company_list_file = "bse_company_list_cleaned.csv" # Assuming this file is present in deployment
@@ -213,14 +210,15 @@ def load_bse_company_list():
 # --- Background Worker Logic ---
 
 def reload_monitored_scrip_codes_from_config_file():
-    """Task to periodically reload the monitored scrip codes from the local JSON config."""
-    global GLOBAL_MONITORED_SCRIPS
+    """Task to periodically reload the monitored scrip codes and chat IDs from the local JSON config."""
+    global GLOBAL_MONITORED_SCRIPS, GLOBAL_TELEGRAM_CHAT_IDS
     new_config = load_config()
-    if new_config and "scrip_codes" in new_config:
-        GLOBAL_MONITORED_SCRIPS = new_config["scrip_codes"]
-        log_message(f"Successfully reloaded {len(GLOBAL_MONITORED_SCRIPS)} scrip codes from local config.")
+    if new_config:
+        GLOBAL_MONITORED_SCRIPS = new_config.get("scrip_codes", {})
+        GLOBAL_TELEGRAM_CHAT_IDS = new_config.get("telegram_chat_ids", [])
+        log_message(f"Successfully reloaded {len(GLOBAL_MONITORED_SCRIPS)} scrip codes and {len(GLOBAL_TELEGRAM_CHAT_IDS)} chat IDs from local config.")
     else:
-        log_message("Warning: Failed to reload scrip codes from local config. Keeping previous list.")
+        log_message("Warning: Failed to reload config. Keeping previous lists.")
 
 def check_for_new_announcements_task():
     """
@@ -277,9 +275,14 @@ def check_for_new_announcements_task():
             else:
                 log_message(f"Worker: Announcement for {scrip_code} has unparsable date format '{ann_full_date_str}'. Skipping this announcement.")
 
-        for ann in new_items_for_scrip:
-            msg_text = f"📢 {ann['Title']}\n🕒 {ann['Date']}\n🔗 {ann['PDF Link']}"
-            send_telegram_message(msg_text)
+        # Send messages to all configured Telegram chat IDs
+        if new_items_for_scrip and GLOBAL_TELEGRAM_CHAT_IDS:
+            for chat_id in GLOBAL_TELEGRAM_CHAT_IDS:
+                for ann in new_items_for_scrip:
+                    msg_text = f"📢 {ann['Title']}\n🕒 {ann['Date']}\n🔗 {ann['PDF Link']}"
+                    send_telegram_message(chat_id, msg_text) # Pass chat_id here
+        elif new_items_for_scrip and not GLOBAL_TELEGRAM_CHAT_IDS:
+            log_message("Worker: New announcements found, but no Telegram chat IDs configured.")
 
     save_seen_ids(seen)
     if not new_announcements_found_this_cycle:
@@ -293,7 +296,7 @@ def start_background_worker():
     """
     log_message("Background worker thread started.")
 
-    # Initial load of scrip codes for the worker
+    # Initial load of scrip codes and chat IDs for the worker
     reload_monitored_scrip_codes_from_config_file()
     
     # Run the task immediately on startup
@@ -302,7 +305,7 @@ def start_background_worker():
     # Schedule the main announcement checking task
     schedule.every(5).minutes.do(check_for_new_announcements_task)
     
-    # Schedule the scrip code reloading task (e.g., every 1 minute for quick updates)
+    # Schedule the config reloading task (e.g., every 1 minute for quick updates)
     schedule.every(1).minutes.do(reload_monitored_scrip_codes_from_config_file) 
 
     retries = 0
@@ -324,9 +327,10 @@ def start_background_worker():
 
 @app.route('/')
 def index():
-    """Admin panel homepage with scrip management and links to view announcements."""
+    """Admin panel homepage with scrip management and links to manage chat IDs and view announcements."""
     current_config = load_config()
     scrip_codes = current_config.get("scrip_codes", {})
+    telegram_chat_ids = current_config.get("telegram_chat_ids", [])
     
     # Simple HTML template for the admin panel
     return render_template_string("""
@@ -336,13 +340,14 @@ def index():
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>BSE Scrip Monitor Admin</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
             <style>
                 body { font-family: 'Inter', sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; color: #333; }
-                .container { max-width: 800px; margin: 20px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-                h1, h2 { color: #10486b; text-align: center; margin-bottom: 25px; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
-                h2 { margin-top: 30px; }
+                .container { max-width: 900px; margin: 20px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+                h1, h2, h3 { color: #10486b; text-align: center; margin-bottom: 25px; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
+                h2, h3 { margin-top: 30px; }
                 form { display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #f9f9f9; }
-                input[type="text"], input[type="submit"], button, select {
+                input[type="text"], input[type="submit"], button {
                     padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 1em;
                 }
                 input[type="submit"], button {
@@ -361,13 +366,7 @@ def index():
                 .message { text-align: center; margin-top: 15px; padding: 12px; border-radius: 8px; font-weight: bold; display: none; }
                 .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
                 .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-                .announcement-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                .announcement-table th, .announcement-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-                .announcement-table th { background-color: #f2f2f2; }
-                .announcement-table tr:nth-child(even) { background-color: #f9f9f9; }
-                .announcement-table a { color: #007bff; text-decoration: none; }
-                .announcement-table a:hover { text-decoration: underline; }
-                .select-scrip-form { display: flex; gap: 10px; justify-content: center; align-items: center; margin-bottom: 20px; }
+                .info-box { background-color: #e0f2f7; border-left: 5px solid #007bff; padding: 15px; margin-bottom: 20px; border-radius: 8px; font-size: 0.95em; }
             </style>
         </head>
         <body>
@@ -376,7 +375,7 @@ def index():
                 <div id="message" class="message" style="display:none;"></div>
 
                 <h2>Manage Monitored Scrips</h2>
-                <form id="addForm">
+                <form id="addScripForm">
                     <input type="text" id="bseCode" name="bse_code" placeholder="BSE Code (e.g., 500325)" required>
                     <input type="text" id="companyName" name="company_name" placeholder="Company Name (e.g., Reliance Industries)" required>
                     <input type="submit" value="Add Scrip">
@@ -385,6 +384,24 @@ def index():
                 <h3>Currently Monitored Scrips:</h3>
                 <ul id="scripList"></ul>
 
+                <h2>Manage Telegram Recipients</h2>
+                <div class="info-box">
+                    <p>To get your Chat ID:</p>
+                    <ol>
+                        <li>Open Telegram.</li>
+                        <li>Search for the bot <code>@RawDataBot</code>.</li>
+                        <li>Send it any message. It will reply with your Chat ID.</li>
+                        <li>Copy that numeric ID and paste it below.</li>
+                    </ol>
+                </div>
+                <form id="addChatIdForm">
+                    <input type="text" id="chatId" name="chat_id" placeholder="Telegram Chat ID (e.g., 123456789)" required>
+                    <input type="submit" value="Add Chat ID">
+                </form>
+
+                <h3>Current Telegram Recipients:</h3>
+                <ul id="chatIdList"></ul>
+
                 <div class="button-group">
                     <a href="/announcements">View Announcements</a>
                 </div>
@@ -392,13 +409,17 @@ def index():
 
             <script>
                 const scripList = document.getElementById('scripList');
-                const addForm = document.getElementById('addForm');
+                const addScripForm = document.getElementById('addScripForm');
+                const chatIdList = document.getElementById('chatIdList');
+                const addChatIdForm = document.getElementById('addChatIdForm');
                 const messageDiv = document.getElementById('message');
 
                 async function fetchAndDisplayScrips() {
                     try {
-                        const response = await fetch('/api/scripts');
+                        const response = await fetch('/api/config');
                         const data = await response.json();
+                        
+                        // Display Scrips
                         scripList.innerHTML = '';
                         if (Object.keys(data.scrip_codes).length === 0) {
                             scripList.innerHTML = '<li>No scrips currently monitored.</li>';
@@ -407,56 +428,55 @@ def index():
                                 const li = document.createElement('li');
                                 li.innerHTML = `
                                     <span>${code}: ${data.scrip_codes[code]}</span>
-                                    <button class="delete-btn" data-code="${code}">Delete</button>
+                                    <button class="delete-btn" data-type="scrip" data-code="${code}">Delete</button>
                                 `;
                                 scripList.appendChild(li);
                             }
                         }
-                    } catch (error) {
-                        showMessage('error', 'Failed to load scrips: ' + error.message);
-                    }
-                }
 
-                async function addScrip(event) {
-                    event.preventDefault();
-                    const bseCode = document.getElementById('bseCode').value.trim();
-                    const companyName = document.getElementById('companyName').value.trim();
-
-                    try {
-                        const response = await fetch('/api/scripts', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ action: 'add', bse_code: bseCode, company_name: companyName })
-                        });
-                        const result = await response.json();
-                        if (response.ok) {
-                            showMessage('success', result.message);
-                            addForm.reset();
-                            fetchAndDisplayScrips();
+                        // Display Chat IDs
+                        chatIdList.innerHTML = '';
+                        if (data.telegram_chat_ids.length === 0) {
+                            chatIdList.innerHTML = '<li>No Telegram recipients added.</li>';
                         } else {
-                            showMessage('error', result.message || 'Failed to add scrip.');
+                            data.telegram_chat_ids.forEach(id => {
+                                const li = document.createElement('li');
+                                li.innerHTML = `
+                                    <span>${id}</span>
+                                    <button class="delete-btn" data-type="chat_id" data-id="${id}">Delete</button>
+                                `;
+                                chatIdList.appendChild(li);
+                            });
                         }
+
                     } catch (error) {
-                        showMessage('error', 'Network error: ' + error.message);
+                        showMessage('error', 'Failed to load configuration: ' + error.message);
                     }
                 }
 
-                async function deleteScrip(bseCode) {
-                    if (!confirm(`Are you sure you want to delete scrip code ${bseCode}?`)) {
-                        return;
+                async function manageConfig(action, type, value1, value2 = null) {
+                    let body = { action: action, type: type };
+                    if (type === 'scrip') {
+                        body.bse_code = value1;
+                        if (action === 'add') body.company_name = value2;
+                    } else if (type === 'chat_id') {
+                        body.chat_id = value1;
                     }
+
                     try {
-                        const response = await fetch('/api/scripts', {
+                        const response = await fetch('/api/config', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ action: 'remove', bse_code: bseCode })
+                            body: JSON.stringify(body)
                         });
                         const result = await response.json();
                         if (response.ok) {
                             showMessage('success', result.message);
+                            if (type === 'scrip') addScripForm.reset();
+                            if (type === 'chat_id') addChatIdForm.reset();
                             fetchAndDisplayScrips();
                         } else {
-                            showMessage('error', result.message || 'Failed to delete scrip.');
+                            showMessage('error', result.message || `Failed to ${action} ${type}.`);
                         }
                     } catch (error) {
                         showMessage('error', 'Network error: ' + error.message);
@@ -470,10 +490,32 @@ def index():
                     setTimeout(() => { messageDiv.style.display = 'none'; }, 5000);
                 }
 
-                addForm.addEventListener('submit', addScrip);
+                addScripForm.addEventListener('submit', (event) => {
+                    event.preventDefault();
+                    const bseCode = document.getElementById('bseCode').value.trim();
+                    const companyName = document.getElementById('companyName').value.trim();
+                    manageConfig('add', 'scrip', bseCode, companyName);
+                });
+
+                addChatIdForm.addEventListener('submit', (event) => {
+                    event.preventDefault();
+                    const chatId = document.getElementById('chatId').value.trim();
+                    manageConfig('add', 'chat_id', chatId);
+                });
+
                 scripList.addEventListener('click', (event) => {
-                    if (event.target.classList.contains('delete-btn')) {
-                        deleteScrip(event.target.dataset.code);
+                    if (event.target.classList.contains('delete-btn') && event.target.dataset.type === 'scrip') {
+                        if (confirm(`Are you sure you want to delete scrip code ${event.target.dataset.code}?`)) {
+                            manageConfig('remove', 'scrip', event.target.dataset.code);
+                        }
+                    }
+                });
+
+                chatIdList.addEventListener('click', (event) => {
+                    if (event.target.classList.contains('delete-btn') && event.target.dataset.type === 'chat_id') {
+                        if (confirm(`Are you sure you want to delete chat ID ${event.target.dataset.id}?`)) {
+                            manageConfig('remove', 'chat_id', event.target.dataset.id);
+                        }
                     }
                 });
 
@@ -483,48 +525,73 @@ def index():
         </html>
     """)
 
-@app.route('/api/scripts', methods=['GET'])
-def get_scripts_api():
-    """API endpoint to get the current list of monitored scrip codes."""
-    current_config = load_config()
-    return jsonify({"scrip_codes": current_config.get("scrip_codes", {})})
+@app.route('/api/config', methods=['GET'])
+def get_config_api():
+    """API endpoint to get the current configuration (scrip codes and chat IDs)."""
+    return jsonify(load_config())
 
-@app.route('/api/scripts', methods=['POST'])
-def manage_scripts_api():
-    """API endpoint to add or remove scrip codes."""
+@app.route('/api/config', methods=['POST'])
+def manage_config_api():
+    """API endpoint to add or remove scrip codes or Telegram chat IDs."""
     data = request.get_json()
-    action = data.get('action')
-    bse_code = data.get('bse_code')
-    company_name = data.get('company_name')
+    action = data.get('action') # 'add' or 'remove'
+    item_type = data.get('type') # 'scrip' or 'chat_id'
 
     current_config_data = load_config() # Always load the latest to avoid race conditions
 
-    if action == 'add':
-        if not bse_code or not company_name:
-            return jsonify({"message": "BSE Code and Company Name are required."}), 400
-        if bse_code in current_config_data["scrip_codes"]:
-            return jsonify({"message": f"Scrip code {bse_code} already exists."}), 409
+    if item_type == 'scrip':
+        bse_code = data.get('bse_code')
+        company_name = data.get('company_name')
+        if action == 'add':
+            if not bse_code or not company_name:
+                return jsonify({"message": "BSE Code and Company Name are required."}), 400
+            if bse_code in current_config_data["scrip_codes"]:
+                return jsonify({"message": f"Scrip code {bse_code} already exists."}), 409
+            
+            current_config_data["scrip_codes"][bse_code] = company_name
+            save_config(current_config_data)
+            return jsonify({"message": f"Scrip code {bse_code} ({company_name}) added successfully."}), 200
         
-        current_config_data["scrip_codes"][bse_code] = company_name
-        save_config(current_config_data)
-        # Trigger an immediate reload in the worker thread (optional, but good for responsiveness)
-        schedule.every(1).seconds.do(reload_monitored_scrip_codes_from_config_file).tag('immediate_reload')
-        return jsonify({"message": f"Scrip code {bse_code} ({company_name}) added successfully."}), 200
-    
-    elif action == 'remove':
-        if not bse_code:
-            return jsonify({"message": "BSE Code is required for removal."}), 400
-        if bse_code not in current_config_data["scrip_codes"]:
-            return jsonify({"message": f"Scrip code {bse_code} not found."}), 404
+        elif action == 'remove':
+            if not bse_code:
+                return jsonify({"message": "BSE Code is required for removal."}), 400
+            if bse_code not in current_config_data["scrip_codes"]:
+                return jsonify({"message": f"Scrip code {bse_code} not found."}), 404
+            
+            del current_config_data["scrip_codes"][bse_code]
+            save_config(current_config_data)
+            return jsonify({"message": f"Scrip code {bse_code} removed successfully."}), 200
         
-        del current_config_data["scrip_codes"][bse_code]
-        save_config(current_config_data)
-        # Trigger an immediate reload in the worker thread (optional)
-        schedule.every(1).seconds.do(reload_monitored_scrip_codes_from_config_file).tag('immediate_reload')
-        return jsonify({"message": f"Scrip code {bse_code} removed successfully."}), 200
+        else:
+            return jsonify({"message": "Invalid scrip action. Use 'add' or 'remove'."}), 400
+
+    elif item_type == 'chat_id':
+        chat_id = data.get('chat_id')
+        if action == 'add':
+            if not chat_id:
+                return jsonify({"message": "Chat ID is required."}), 400
+            if chat_id in current_config_data["telegram_chat_ids"]:
+                return jsonify({"message": f"Chat ID {chat_id} already exists."}), 409
+            
+            current_config_data["telegram_chat_ids"].append(chat_id)
+            save_config(current_config_data)
+            return jsonify({"message": f"Chat ID {chat_id} added successfully."}), 200
+        
+        elif action == 'remove':
+            if not chat_id:
+                return jsonify({"message": "Chat ID is required for removal."}), 400
+            if chat_id not in current_config_data["telegram_chat_ids"]:
+                return jsonify({"message": f"Chat ID {chat_id} not found."}), 404
+            
+            current_config_data["telegram_chat_ids"].remove(chat_id)
+            save_config(current_config_data)
+            return jsonify({"message": f"Chat ID {chat_id} removed successfully."}), 200
+        
+        else:
+            return jsonify({"message": "Invalid chat ID action. Use 'add' or 'remove'."}), 400
     
     else:
-        return jsonify({"message": "Invalid action. Use 'add' or 'remove'."}), 400
+        return jsonify({"message": "Invalid item type. Use 'scrip' or 'chat_id'."}), 400
 
 @app.route('/announcements', methods=['GET'])
 def view_announcements():
@@ -535,6 +602,10 @@ def view_announcements():
     selected_scrip_code = request.args.get('scrip_code')
     announcements_to_display = []
     company_name_for_display = "Select a Company"
+
+    # Ensure GLOBAL_MONITORED_SCRIPS is up-to-date for the dropdown
+    current_config_for_ui = load_config()
+    GLOBAL_MONITORED_SCRIPS.update(current_config_for_ui.get("scrip_codes", {}))
 
     if selected_scrip_code:
         company_name_for_display = GLOBAL_MONITORED_SCRIPS.get(selected_scrip_code, f"Unknown ({selected_scrip_code})")
@@ -554,6 +625,7 @@ def view_announcements():
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>View Announcements</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
             <style>
                 body {{ font-family: 'Inter', sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; color: #333; }}
                 .container {{ max-width: 900px; margin: 20px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
@@ -621,11 +693,11 @@ if __name__ == '__main__':
 
     # Create empty config/cache files if they don't exist on first run
     if not os.path.exists(CONFIG_FILE):
-        save_config({"scrip_codes": {}})
+        save_config({"scrip_codes": {}, "telegram_chat_ids": []}) # Initialize with empty chat_ids list
     if not os.path.exists(CACHE_FILE):
         save_seen_ids({})
 
-    # Load initial BSE company list for suggestions
+    # Load initial BSE company list for suggestions (only once at startup)
     load_bse_company_list()
 
     # Start the background worker thread
@@ -638,5 +710,3 @@ if __name__ == '__main__':
     # Render.com provides the port via an environment variable
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
-
-
