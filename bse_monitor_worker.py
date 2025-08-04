@@ -5,13 +5,13 @@ import requests
 from datetime import datetime, timedelta
 import schedule
 import random # For exponential backoff jitter
-# We'll assume fetcher.py is available in the same environment
-# from fetcher import get_bse_announcements # This import will happen in the main function now
+# Removed pandas as it's no longer needed for reading local CSV
+# Removed threading as reload_scrip_codes_task will now make an HTTP request
 
 # --- Configuration ---
-# File to list the scrip codes and names to monitor.
-# This file will be loaded by the worker itself, or by the admin panel if you integrate that.
-MONITORED_SCRIPTS_FILE = 'monitored_scripts.csv' 
+# URL of your deployed Flask Admin Panel service.
+# IMPORTANT: Replace this with the actual URL provided by Render.com for your admin panel.
+ADMIN_PANEL_URL = 'https://bse-monitor-yc3q.onrender.com/api/scripts' 
 
 # Path to the JSON file where announcements will be stored (for tracking new ones)
 CACHE_FILE = "seen_announcements.json"
@@ -30,14 +30,9 @@ TELEGRAM_MAX_RETRIES = 5 # Max retries for sending a single Telegram message
 TELEGRAM_RETRY_DELAY_BASE = 5 # Base delay in seconds for exponential backoff
 
 # Global variable to store currently monitored scrip codes, reloaded periodically
-# This will be managed by the worker itself, or by fetching from the admin panel later
 GLOBAL_SCRIP_CODES = {} 
 
 # --- Helper Functions ---
-
-# Note: load_monitored_scripts is not directly used here anymore if fetching from admin panel.
-# If you decide to keep local CSV loading for the worker, re-add it here.
-# For now, we'll assume GLOBAL_SCRIP_CODES is populated externally or by a specific load function.
 
 def load_seen_ids():
     """Loads previously seen announcement IDs from a JSON cache file."""
@@ -88,6 +83,39 @@ def send_telegram_message(message):
     log_message(f"Failed to send Telegram message after {TELEGRAM_MAX_RETRIES} attempts: {message}")
     return False # Message failed after all retries
 
+def fetch_scrip_codes_from_admin_panel():
+    """
+    Fetches the latest monitored scrip codes from the Flask admin panel API.
+    """
+    try:
+        response = requests.get(ADMIN_PANEL_URL, timeout=10)
+        response.raise_for_status() # Raise an exception for HTTP errors
+        data = response.json()
+        if "scrip_codes" in data:
+            log_message(f"Successfully fetched {len(data['scrip_codes'])} scrip codes from admin panel.")
+            return data["scrip_codes"]
+        else:
+            log_message(f"Error: 'scrip_codes' key not found in admin panel response: {data}")
+            return {}
+    except requests.exceptions.RequestException as e:
+        log_message(f"Error fetching scrip codes from admin panel at {ADMIN_PANEL_URL}: {e}")
+        return {}
+    except json.JSONDecodeError:
+        log_message(f"Error decoding JSON response from admin panel at {ADMIN_PANEL_URL}.")
+        return {}
+    except Exception as e:
+        log_message(f"An unexpected error occurred while fetching scrip codes: {e}")
+        return {}
+
+def reload_scrip_codes_task():
+    """Task to periodically reload the monitored scrip codes from the admin panel."""
+    global GLOBAL_SCRIP_CODES
+    new_scripts = fetch_scrip_codes_from_admin_panel()
+    if new_scripts:
+        GLOBAL_SCRIP_CODES = new_scripts
+    else:
+        log_message("Warning: Failed to reload scrip codes from admin panel. Keeping previous list.")
+
 def check_for_new_announcements_task():
     """
     The main task function that will be scheduled to run periodically.
@@ -104,7 +132,8 @@ def check_for_new_announcements_task():
 
     new_announcements_found_this_cycle = False
 
-    # Use the globally loaded scrip codes (populated by start_bse_monitor_worker)
+    # Use the globally loaded scrip codes
+    # Ensure GLOBAL_SCRIP_CODES is not empty before iterating
     if not GLOBAL_SCRIP_CODES:
         log_message("No scrip codes loaded. Skipping announcement check in this cycle.")
         return # Exit if no scrip codes to monitor
@@ -139,11 +168,12 @@ def check_for_new_announcements_task():
                 if ann_date.date() >= cutoff_date.date():
                     news_id = ann['XBRL Link'].split("Bsenewid=")[-1].split("&")[0] if "Bsenewid=" in ann['XBRL Link'] else ann['Title'] + ann['Date']
 
-                    if news_id not in seen[code]:
-                        seen[code][news_id] = True # Mark as seen
+                    if news_id not in seen[scrip_code]:
+                        seen[scrip_code][news_id] = True # Mark as seen
                         new_items_for_scrip.append(ann)
                         log_message(f"Found new announcement for {scrip_code} ({company_name}): {ann['Title']}")
                         new_announcements_found_this_cycle = True
+                # Removed the else block that logged skipped older announcements
             else:
                 log_message(f"Announcement for {scrip_code} has unparsable date format '{ann_full_date_str}'. Skipping this announcement.")
 
@@ -156,13 +186,16 @@ def check_for_new_announcements_task():
         log_message("No new announcements found in this cycle.")
     log_message(f"Monitoring cycle completed.")
 
+
 def start_bse_monitor_worker(initial_scrip_codes_dict):
     """
     Initializes and starts the BSE monitoring worker.
     This function will be called from the Flask app in a separate thread.
     """
     global GLOBAL_SCRIP_CODES
-    GLOBAL_SCRIP_CODES = initial_scrip_codes_dict # Set initial scrip codes from Flask app
+    # The initial_scrip_codes_dict passed here will be empty if the admin panel isn't set up yet,
+    # or it will contain the initial list from the admin panel's config.
+    GLOBAL_SCRIP_CODES = initial_scrip_codes_dict 
 
     # Ensure log file exists
     if not os.path.exists(LOG_FILE):
@@ -170,7 +203,7 @@ def start_bse_monitor_worker(initial_scrip_codes_dict):
             f.write(f"--- Telegram Log started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
 
     log_message("BSE Monitor Worker started.")
-    log_message(f"Initial scrips loaded: {', '.join(GLOBAL_SCRIP_CODES.keys()) if GLOBAL_SCRIP_CODES else 'None'}")
+    log_message(f"Initial scrips for worker: {', '.join(GLOBAL_SCRIP_CODES.keys()) if GLOBAL_SCRIP_CODES else 'None'}")
 
     # Run the task immediately on startup
     check_for_new_announcements_task()
@@ -179,11 +212,7 @@ def start_bse_monitor_worker(initial_scrip_codes_dict):
     schedule.every(5).minutes.do(check_for_new_announcements_task)
     
     # Schedule the scrip code reloading task (e.g., every 15 minutes)
-    # This will fetch from the admin panel URL once integrated.
-    # For now, it will just reload the local CSV.
-    # You'll replace this with a call to fetch from ADMIN_PANEL_URL later.
-    schedule.every(15).minutes.do(lambda: log_message("Scheduled reload of scrip codes (placeholder for external fetch)."))
-
+    schedule.every(15).minutes.do(reload_scrip_codes_task) 
 
     retries = 0
     try:
