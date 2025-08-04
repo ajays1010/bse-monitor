@@ -1,82 +1,601 @@
 import os
+import json
 import threading
-from flask import Flask, jsonify, render_template_string
+import time
+import requests
+from datetime import datetime, timedelta
+import schedule
+import random
+import pandas as pd
+from flask import Flask, request, jsonify, render_template_string, url_for, redirect
 
-# Import the worker function from your renamed script
-from bse_monitor_worker import start_bse_monitor_worker, log_message
-import pandas as pd # Needed to load initial CSV for the worker
-import json # Needed to load initial JSON for the worker
+# --- Global Configuration ---
+# File to store the monitored scrip codes (managed by the admin panel)
+CONFIG_FILE = 'monitored_scripts_config.json' 
+# File to track seen announcements (used by the background worker)
+CACHE_FILE = "seen_announcements.json"
+# File to log all activity
+LOG_FILE = "telegram_log.txt" 
 
-# --- Configuration ---
-# File to list the scrip codes and names to monitor.
-# This file is now defined directly in app.py
-MONITORED_SCRIPTS_FILE = 'monitored_scripts.csv' 
+# Worker settings
+MAX_RETRIES_MAIN_LOOP = 3 # Max retries for the main scheduling loop
+DAYS_TO_FETCH = 2 # Set to 2 to include today and the previous 2 full days (total 3 days)
+
+# Telegram settings
+TELEGRAM_BOT_TOKEN = '7527888676:AAEul4nktWJT2Bt7vciEsC9ukHfV1bTx-ck'
+TELEGRAM_CHAT_ID = '453652457'
+TELEGRAM_TIMEOUT = 15 # Increased timeout for Telegram requests (from 10 to 15 seconds)
+TELEGRAM_MAX_RETRIES = 5 # Max retries for sending a single Telegram message
+TELEGRAM_RETRY_DELAY_BASE = 5 # Base delay in seconds for exponential backoff
+
+# Global variables for application state
+GLOBAL_MONITORED_SCRIPS = {} # Stores scrip_code: company_name from config file
+GLOBAL_BSE_COMPANY_NAMES = [] # Stores all company names for suggestions
+GLOBAL_BSE_DF = pd.DataFrame() # Stores the full BSE company list DataFrame
 
 app = Flask(__name__)
 
-# --- Helper function to load initial scrip codes for the worker ---
-def load_initial_scrip_codes(file_path):
+# --- Core Helper Functions (consolidated from previous scripts) ---
+
+def log_message(message):
+    """Logs messages to a local file with a timestamp."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(f"[{timestamp}] {message}\n")
+    print(f"[LOG] {message}") # Also print to console for testing
+
+def send_telegram_message(message):
+    """Sends a message to Telegram with retry logic and logs it."""
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
+
+    for attempt in range(TELEGRAM_MAX_RETRIES):
+        try:
+            response = requests.post(url, data=payload, timeout=TELEGRAM_TIMEOUT)
+            response.raise_for_status() # Raises HTTPError for bad responses (4xx or 5xx)
+            log_message(f"Telegram message sent successfully (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {message}")
+            return True # Message sent successfully
+        except requests.exceptions.Timeout as e:
+            delay = (TELEGRAM_RETRY_DELAY_BASE * (2 ** attempt)) + random.uniform(0, 1) # Exponential backoff with jitter
+            log_message(f"Telegram send timeout (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. Retrying in {delay:.2f} seconds.")
+            time.sleep(delay)
+        except requests.exceptions.RequestException as e:
+            delay = (TELEGRAM_RETRY_DELAY_BASE * (2 ** attempt)) + random.uniform(0, 1)
+            log_message(f"Telegram request error (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. Retrying in {delay:.2f} seconds.")
+            time.sleep(delay)
+        except Exception as e:
+            log_message(f"Unexpected error sending Telegram message (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. No further retries for this attempt.")
+            break # Break on unexpected errors not related to requests
+
+    log_message(f"Failed to send Telegram message after {TELEGRAM_MAX_RETRIES} attempts: {message}")
+    return False # Message failed after all retries
+
+def load_config():
+    """Loads scrip codes from the JSON config file."""
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            log_message(f"Warning: Could not decode JSON from {CONFIG_FILE}. Returning empty config.")
+            return {"scrip_codes": {}}
+    return {"scrip_codes": {}} # Default empty structure if file doesn't exist
+
+def save_config(config_data):
+    """Saves scrip codes to the JSON config file."""
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config_data, f, indent=4)
+        log_message(f"Config saved to {CONFIG_FILE}.")
+    except Exception as e:
+        log_message(f"Error saving config to {CONFIG_FILE}: {e}")
+
+def load_seen_ids():
+    """Loads previously seen announcement IDs from a JSON cache file."""
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            log_message(f"Warning: Could not decode JSON from {CACHE_FILE}. Starting with empty cache.")
+            return {}
+    return {}
+
+def save_seen_ids(data):
+    """Saves current seen announcement IDs to a JSON cache file."""
+    try:
+        with open(CACHE_FILE, "w") as f:
+            json.dump(data, f)
+        log_message(f"Seen IDs saved to {CACHE_FILE}.")
+    except Exception as e:
+        log_message(f"Error saving seen IDs to {CACHE_FILE}: {e}")
+
+def get_bse_announcements(scrip_code, num_announcements=15):
     """
-    Loads scrip codes from a local CSV/XLSX file for initial worker startup.
-    This will be replaced by fetching from the admin panel in the next iteration.
+    Fetches recent announcements for a given scrip code from the BSE API.
+    (Copied from fetcher.py)
     """
-    scripts = {}
-    if not os.path.exists(file_path):
-        log_message(f"Warning: Initial monitored scripts file '{file_path}' not found for worker. Starting with empty list.")
-        return scripts
+    if not scrip_code.isdigit():
+        log_message(f"Input Error: Scrip code '{scrip_code}' must be a numeric string. Skipping.")
+        return []
 
     try:
-        if file_path.endswith('.csv'):
-            df = pd.read_csv(file_path)
-        elif file_path.endswith('.xlsx'):
-            df = pd.read_excel(file_path)
-        else:
-            log_message(f"Error: Unsupported file format for '{file_path}'. Use .csv or .xlsx for initial load.")
-            return scripts
+        api_url = "https://api.bseindia.com/BseIndiaAPI/api/AnnGetData/w"
+        to_date = datetime.now()
+        from_date = to_date - timedelta(days=90) # Fetches for the last 90 days by default
 
-        if 'BSE Code' not in df.columns or 'Company Name' not in df.columns:
-            log_message(f"Error: '{file_path}' must contain 'BSE Code' and 'Company Name' columns for initial load.")
-            return scripts
+        to_date_str = to_date.strftime('%Y%m%d')
+        from_date_str = from_date.strftime('%Y%m%d')
 
-        for index, row in df.iterrows():
-            scrip_code = str(row['BSE Code']).strip()
-            company_name = str(row['Company Name']).strip()
-            if scrip_code and company_name:
-                scripts[scrip_code] = company_name
-        log_message(f"Successfully loaded initial {len(scripts)} scripts from {file_path} for worker.")
+        params = {
+            'strCat': '-1',
+            'strPrevDate': from_date_str,
+            'strToDate': to_date_str,
+            'strScrip': scrip_code,
+            'strSearch': 'P',
+            'strType': 'C'
+        }
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://www.bseindia.com/'
+        }
+
+        response = requests.get(api_url, headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+
+        data = response.json()
+        announcements_data = data.get('Table', [])
+
+        if not announcements_data:
+            return []
+
+        announcements_list = []
+        for announcement in announcements_data[:num_announcements]:
+            title = announcement.get('HEADLINE', 'N/A')
+            pdf_link_filename = announcement.get('ATTACHMENTNAME')
+            date_time = announcement.get('DissemDT', 'N/A')
+            news_id = announcement.get('NEWSID')
+            scrip_cd = announcement.get('SCRIP_CD')
+
+            pdf_link = f"https://www.bseindia.com/xml-data/corpfiling/AttachLive/{pdf_link_filename}" if pdf_link_filename else "No PDF Available"
+            xbrl_link = f"https://www.bseindia.com/Msource/90D/CorpXbrlGen.aspx?Bsenewid={news_id}&Scripcode={scrip_cd}" if news_id and scrip_cd else "No XBRL Available"
+
+            announcements_list.append({
+                "Date": date_time,
+                "Title": title,
+                "PDF Link": pdf_link,
+                "XBRL Link": xbrl_link
+            })
+
+        return announcements_list
+
+    except requests.exceptions.RequestException as e:
+        log_message(f"Request Error in get_bse_announcements for {scrip_code}: {e}")
+        return []
     except Exception as e:
-        log_message(f"Error loading initial monitored scripts from {file_path} for worker: {e}")
-    return scripts
+        log_message(f"An unexpected error occurred in get_bse_announcements for {scrip_code}:\n{e}")
+        return []
+
+def get_suggestions(query, limit=5):
+    """
+    Provides company name suggestions based on a query.
+    Requires GLOBAL_BSE_DF to be loaded.
+    (Copied from fetcher.py)
+    """
+    if not GLOBAL_BSE_DF.empty and 'Company Name' in GLOBAL_BSE_DF.columns:
+        company_names_list = GLOBAL_BSE_DF["Company Name"].tolist()
+        return process.extract(query, company_names_list, limit=limit)
+    return []
+
+def load_bse_company_list():
+    """
+    Loads the BSE company list for suggestions.
+    (Adapted from fetcher.py)
+    """
+    global GLOBAL_BSE_DF, GLOBAL_BSE_COMPANY_NAMES
+    bse_company_list_file = "bse_company_list_cleaned.csv" # Assuming this file is present in deployment
+
+    try:
+        if os.path.exists(bse_company_list_file):
+            GLOBAL_BSE_DF = pd.read_csv(bse_company_list_file)
+            GLOBAL_BSE_COMPANY_NAMES = GLOBAL_BSE_DF["Company Name"].tolist()
+            log_message(f"Loaded {len(GLOBAL_BSE_COMPANY_NAMES)} companies for suggestions.")
+        else:
+            log_message(f"Warning: {bse_company_list_file} not found. Company name suggestions will not work.")
+            GLOBAL_BSE_DF = pd.DataFrame(columns=["BSE Code", "Company Name"])
+            GLOBAL_BSE_COMPANY_NAMES = []
+    except Exception as e:
+        log_message(f"Error loading {bse_company_list_file}: {e}")
+        GLOBAL_BSE_DF = pd.DataFrame(columns=["BSE Code", "Company Name"])
+        GLOBAL_BSE_COMPANY_NAMES = []
+
+# --- Background Worker Logic ---
+
+def reload_monitored_scrip_codes_from_config_file():
+    """Task to periodically reload the monitored scrip codes from the local JSON config."""
+    global GLOBAL_MONITORED_SCRIPS
+    new_config = load_config()
+    if new_config and "scrip_codes" in new_config:
+        GLOBAL_MONITORED_SCRIPS = new_config["scrip_codes"]
+        log_message(f"Successfully reloaded {len(GLOBAL_MONITORED_SCRIPS)} scrip codes from local config.")
+    else:
+        log_message("Warning: Failed to reload scrip codes from local config. Keeping previous list.")
+
+def check_for_new_announcements_task():
+    """
+    The main task function that will be scheduled to run periodically.
+    It fetches, filters, and sends new announcements.
+    """
+    seen = load_seen_ids()
+    
+    current_time = datetime.now()
+    cutoff_date = current_time - timedelta(days=DAYS_TO_FETCH)
+    log_message(f"Worker: Checking for new announcements since {cutoff_date.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    new_announcements_found_this_cycle = False
+
+    if not GLOBAL_MONITORED_SCRIPS:
+        log_message("Worker: No scrip codes loaded. Skipping announcement check in this cycle.")
+        return
+
+    for scrip_code, company_name in GLOBAL_MONITORED_SCRIPS.items():
+        log_message(f"Worker: Processing {company_name} (Scrip Code: {scrip_code})...")
+        anns = get_bse_announcements(scrip_code, num_announcements=50) 
+
+        if not anns:
+            log_message(f"Worker: No announcements fetched for scrip code {scrip_code}.")
+            continue
+
+        if scrip_code not in seen:
+            seen[scrip_code] = {} # Initialize as dictionary for news_id tracking
+
+        new_items_for_scrip = []
+        for ann in anns:
+            ann_full_date_str = ann.get('Date', '')
+            ann_date = None
+            
+            try:
+                ann_date = datetime.fromisoformat(ann_full_date_str)
+            except ValueError:
+                try:
+                    date_only_str = ann_full_date_str.split('T')[0].split(' ')[0]
+                    ann_date = datetime.strptime(date_only_str, '%Y-%m-%d')
+                except ValueError:
+                    log_message(f"Worker: Warning: Failed to parse date '{ann_full_date_str}' for announcement. Skipping date filter for this item.")
+                    ann_date = None
+
+            if ann_date:
+                if ann_date.date() >= cutoff_date.date():
+                    news_id = ann['XBRL Link'].split("Bsenewid=")[-1].split("&")[0] if "Bsenewid=" in ann['XBRL Link'] else ann['Title'] + ann['Date']
+
+                    if news_id not in seen.get(scrip_code, {}): # Use .get() to safely check nested dict
+                        seen.setdefault(scrip_code, {})[news_id] = True # Set default and mark as seen
+                        new_items_for_scrip.append(ann)
+                        log_message(f"Worker: Found new announcement for {scrip_code} ({company_name}): {ann['Title']}")
+                        new_announcements_found_this_cycle = True
+            else:
+                log_message(f"Worker: Announcement for {scrip_code} has unparsable date format '{ann_full_date_str}'. Skipping this announcement.")
+
+        for ann in new_items_for_scrip:
+            msg_text = f"📢 {ann['Title']}\n🕒 {ann['Date']}\n🔗 {ann['PDF Link']}"
+            send_telegram_message(msg_text)
+
+    save_seen_ids(seen)
+    if not new_announcements_found_this_cycle:
+        log_message("Worker: No new announcements found in this cycle.")
+    log_message(f"Worker: Monitoring cycle completed.")
+
+def start_background_worker():
+    """
+    Initializes and starts the BSE monitoring worker's scheduling loop.
+    This function runs in a separate thread.
+    """
+    log_message("Background worker thread started.")
+
+    # Initial load of scrip codes for the worker
+    reload_monitored_scrip_codes_from_config_file()
+    
+    # Run the task immediately on startup
+    check_for_new_announcements_task()
+
+    # Schedule the main announcement checking task
+    schedule.every(5).minutes.do(check_for_new_announcements_task)
+    
+    # Schedule the scrip code reloading task (e.g., every 1 minute for quick updates)
+    schedule.every(1).minutes.do(reload_monitored_scrip_codes_from_config_file) 
+
+    retries = 0
+    while True:
+        try:
+            schedule.run_pending()
+            time.sleep(1) # Sleep for 1 second to avoid high CPU usage
+            retries = 0 # Reset retries on successful loop iteration
+        except Exception as e:
+            log_message(f"Background Worker: Error in scheduling loop: {e}")
+            retries += 1
+            if retries >= MAX_RETRIES_MAIN_LOOP:
+                log_message(f"Background Worker: Max retries ({MAX_RETRIES_MAIN_LOOP}) reached. Exiting worker thread.")
+                break
+            log_message(f"Background Worker: Retrying scheduling loop in 60 seconds (retry {retries}/{MAX_RETRIES_MAIN_LOOP}).")
+            time.sleep(60)
 
 # --- Flask Routes ---
 
 @app.route('/')
-def home():
-    """Simple homepage to confirm the Flask app is running."""
+def index():
+    """Admin panel homepage with scrip management and links to view announcements."""
+    current_config = load_config()
+    scrip_codes = current_config.get("scrip_codes", {})
+    
+    # Simple HTML template for the admin panel
     return render_template_string("""
         <!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>BSE Monitor Worker</title>
+            <title>BSE Scrip Monitor Admin</title>
             <style>
-                body { font-family: sans-serif; margin: 20px; text-align: center; background-color: #f4f4f4; color: #333; }
-                .container { max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                h1 { color: #10486b; margin-bottom: 15px; }
-                p { font-size: 1.1em; }
-                .status-indicator {
-                    display: inline-block; width: 15px; height: 15px; border-radius: 50%;
-                    background-color: green; margin-left: 10px;
+                body { font-family: 'Inter', sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; color: #333; }
+                .container { max-width: 800px; margin: 20px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+                h1, h2 { color: #10486b; text-align: center; margin-bottom: 25px; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
+                h2 { margin-top: 30px; }
+                form { display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #f9f9f9; }
+                input[type="text"], input[type="submit"], button, select {
+                    padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 1em;
                 }
+                input[type="submit"], button {
+                    background-color: #007bff; color: white; cursor: pointer; border: none; font-weight: bold; transition: background-color 0.3s ease;
+                }
+                input[type="submit"]:hover, button:hover { background-color: #0056b3; }
+                .button-group { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
+                .button-group a {
+                    text-decoration: none; padding: 12px 25px; border-radius: 8px; background-color: #28a745; color: white; font-weight: bold; transition: background-color 0.3s ease;
+                }
+                .button-group a:hover { background-color: #218838; }
+                ul { list-style: none; padding: 0; margin-top: 20px; }
+                li { background: #e9ecef; margin-bottom: 10px; padding: 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+                .delete-btn { background-color: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9em; transition: background-color 0.3s ease; }
+                .delete-btn:hover { background-color: #c82333; }
+                .message { text-align: center; margin-top: 15px; padding: 12px; border-radius: 8px; font-weight: bold; display: none; }
+                .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+                .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+                .announcement-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                .announcement-table th, .announcement-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+                .announcement-table th { background-color: #f2f2f2; }
+                .announcement-table tr:nth-child(even) { background-color: #f9f9f9; }
+                .announcement-table a { color: #007bff; text-decoration: none; }
+                .announcement-table a:hover { text-decoration: underline; }
+                .select-scrip-form { display: flex; gap: 10px; justify-content: center; align-items: center; margin-bottom: 20px; }
             </style>
         </head>
         <body>
             <div class="container">
-                <h1>BSE Announcement Monitor Worker</h1>
-                <p>This service is running in the background.</p>
-                <p>Status: <strong>Active</strong> <span class="status-indicator"></span></p>
-                <p>Check the service logs on Render.com for detailed activity.</p>
+                <h1>BSE Monitor Admin Panel</h1>
+                <div id="message" class="message" style="display:none;"></div>
+
+                <h2>Manage Monitored Scrips</h2>
+                <form id="addForm">
+                    <input type="text" id="bseCode" name="bse_code" placeholder="BSE Code (e.g., 500325)" required>
+                    <input type="text" id="companyName" name="company_name" placeholder="Company Name (e.g., Reliance Industries)" required>
+                    <input type="submit" value="Add Scrip">
+                </form>
+
+                <h3>Currently Monitored Scrips:</h3>
+                <ul id="scripList"></ul>
+
+                <div class="button-group">
+                    <a href="/announcements">View Announcements</a>
+                </div>
+            </div>
+
+            <script>
+                const scripList = document.getElementById('scripList');
+                const addForm = document.getElementById('addForm');
+                const messageDiv = document.getElementById('message');
+
+                async function fetchAndDisplayScrips() {
+                    try {
+                        const response = await fetch('/api/scripts');
+                        const data = await response.json();
+                        scripList.innerHTML = '';
+                        if (Object.keys(data.scrip_codes).length === 0) {
+                            scripList.innerHTML = '<li>No scrips currently monitored.</li>';
+                        } else {
+                            for (const code in data.scrip_codes) {
+                                const li = document.createElement('li');
+                                li.innerHTML = `
+                                    <span>${code}: ${data.scrip_codes[code]}</span>
+                                    <button class="delete-btn" data-code="${code}">Delete</button>
+                                `;
+                                scripList.appendChild(li);
+                            }
+                        }
+                    } catch (error) {
+                        showMessage('error', 'Failed to load scrips: ' + error.message);
+                    }
+                }
+
+                async function addScrip(event) {
+                    event.preventDefault();
+                    const bseCode = document.getElementById('bseCode').value.trim();
+                    const companyName = document.getElementById('companyName').value.trim();
+
+                    try {
+                        const response = await fetch('/api/scripts', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'add', bse_code: bseCode, company_name: companyName })
+                        });
+                        const result = await response.json();
+                        if (response.ok) {
+                            showMessage('success', result.message);
+                            addForm.reset();
+                            fetchAndDisplayScrips();
+                        } else {
+                            showMessage('error', result.message || 'Failed to add scrip.');
+                        }
+                    } catch (error) {
+                        showMessage('error', 'Network error: ' + error.message);
+                    }
+                }
+
+                async function deleteScrip(bseCode) {
+                    if (!confirm(`Are you sure you want to delete scrip code ${bseCode}?`)) {
+                        return;
+                    }
+                    try {
+                        const response = await fetch('/api/scripts', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'remove', bse_code: bseCode })
+                        });
+                        const result = await response.json();
+                        if (response.ok) {
+                            showMessage('success', result.message);
+                            fetchAndDisplayScrips();
+                        } else {
+                            showMessage('error', result.message || 'Failed to delete scrip.');
+                        }
+                    } catch (error) {
+                        showMessage('error', 'Network error: ' + error.message);
+                    }
+                }
+
+                function showMessage(type, text) {
+                    messageDiv.className = `message ${type}`;
+                    messageDiv.textContent = text;
+                    messageDiv.style.display = 'block';
+                    setTimeout(() => { messageDiv.style.display = 'none'; }, 5000);
+                }
+
+                addForm.addEventListener('submit', addScrip);
+                scripList.addEventListener('click', (event) => {
+                    if (event.target.classList.contains('delete-btn')) {
+                        deleteScrip(event.target.dataset.code);
+                    }
+                });
+
+                fetchAndDisplayScrips(); // Initial load
+            </script>
+        </body>
+        </html>
+    """)
+
+@app.route('/api/scripts', methods=['GET'])
+def get_scripts_api():
+    """API endpoint to get the current list of monitored scrip codes."""
+    current_config = load_config()
+    return jsonify({"scrip_codes": current_config.get("scrip_codes", {})})
+
+@app.route('/api/scripts', methods=['POST'])
+def manage_scripts_api():
+    """API endpoint to add or remove scrip codes."""
+    data = request.get_json()
+    action = data.get('action')
+    bse_code = data.get('bse_code')
+    company_name = data.get('company_name')
+
+    current_config_data = load_config() # Always load the latest to avoid race conditions
+
+    if action == 'add':
+        if not bse_code or not company_name:
+            return jsonify({"message": "BSE Code and Company Name are required."}), 400
+        if bse_code in current_config_data["scrip_codes"]:
+            return jsonify({"message": f"Scrip code {bse_code} already exists."}), 409
+        
+        current_config_data["scrip_codes"][bse_code] = company_name
+        save_config(current_config_data)
+        # Trigger an immediate reload in the worker thread (optional, but good for responsiveness)
+        schedule.every(1).seconds.do(reload_monitored_scrip_codes_from_config_file).tag('immediate_reload')
+        return jsonify({"message": f"Scrip code {bse_code} ({company_name}) added successfully."}), 200
+    
+    elif action == 'remove':
+        if not bse_code:
+            return jsonify({"message": "BSE Code is required for removal."}), 400
+        if bse_code not in current_config_data["scrip_codes"]:
+            return jsonify({"message": f"Scrip code {bse_code} not found."}), 404
+        
+        del current_config_data["scrip_codes"][bse_code]
+        save_config(current_config_data)
+        # Trigger an immediate reload in the worker thread (optional)
+        schedule.every(1).seconds.do(reload_monitored_scrip_codes_from_config_file).tag('immediate_reload')
+        return jsonify({"message": f"Scrip code {bse_code} removed successfully."}), 200
+    
+    else:
+        return jsonify({"message": "Invalid action. Use 'add' or 'remove'."}), 400
+
+@app.route('/announcements', methods=['GET'])
+def view_announcements():
+    """
+    Displays announcements for a selected scrip code in an HTML table.
+    Allows selection of scrip code via a dropdown.
+    """
+    selected_scrip_code = request.args.get('scrip_code')
+    announcements_to_display = []
+    company_name_for_display = "Select a Company"
+
+    if selected_scrip_code:
+        company_name_for_display = GLOBAL_MONITORED_SCRIPS.get(selected_scrip_code, f"Unknown ({selected_scrip_code})")
+        announcements_to_display = get_bse_announcements(selected_scrip_code, num_announcements=20) # Fetch up to 20 recent
+        log_message(f"Web UI: Fetched {len(announcements_to_display)} announcements for {company_name_for_display}.")
+    
+    # Generate options for the dropdown
+    scrip_options_html = ""
+    for code, name in GLOBAL_MONITORED_SCRIPS.items():
+        selected = "selected" if code == selected_scrip_code else ""
+        scrip_options_html += f"<option value='{code}' {selected}>{name} ({code})</option>"
+
+    return render_template_string(f """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>View Announcements</title>
+            <style>
+                body {{ font-family: 'Inter', sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; color: #333; }}
+                .container {{ max-width: 900px; margin: 20px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
+                h1, h2 {{ color: #10486b; text-align: center; margin-bottom: 25px; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }}
+                h2 {{ margin-top: 30px; }}
+                .back-link {{ display: block; text-align: center; margin-bottom: 20px; color: #007bff; text-decoration: none; font-weight: bold; }}
+                .back-link:hover {{ text-decoration: underline; }}
+                .select-scrip-form {{ display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #f9f9f9; }}
+                select, button {{ padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 1em; }}
+                button {{ background-color: #007bff; color: white; cursor: pointer; border: none; font-weight: bold; transition: background-color 0.3s ease; }}
+                button:hover {{ background-color: #0056b3; }}
+                .announcement-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+                .announcement-table th, .announcement-table td {{ border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }}
+                .announcement-table th {{ background-color: #e9ecef; color: #10486b; }}
+                .announcement-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
+                .announcement-table a {{ color: #007bff; text-decoration: none; }}
+                .announcement-table a:hover {{ text-decoration: underline; }}
+                .no-announcements {{ text-align: center; padding: 20px; color: #666; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <a href="{url_for('index')}" class="back-link">&larr; Back to Admin Home</a>
+                <h1>Announcements for {company_name_for_display}</h1>
+
+                <form class="select-scrip-form" action="{url_for('view_announcements')}" method="GET">
+                    <label for="scrip_select">Select Company:</label>
+                    <select id="scrip_select" name="scrip_code" onchange="this.form.submit()">
+                        <option value="">-- Select a Company --</option>
+                        {scrip_options_html}
+                    </select>
+                </form>
+
+                {"<table class='announcement-table'><thead><tr><th>Date & Time</th><th>Title</th><th>PDF Link</th><th>XBRL Link</th></tr></thead><tbody>" if announcements_to_display else ""}
+                {"".join([
+                    f"<tr><td>{ann.get('Date')}</td><td>{ann.get('Title')}</td><td><a href='{ann.get('PDF Link')}' target='_blank'>View PDF</a></td><td><a href='{ann.get('XBRL Link')}' target='_blank'>View XBRL</a></td></tr>"
+                    for ann in announcements_to_display
+                ]) if announcements_to_display else ""}
+                {"</tbody></table>" if announcements_to_display else ""}
+
+                {"<p class='no-announcements'>No announcements found for selected company or in the last 90 days.</p>" if not announcements_to_display and selected_scrip_code else ""}
+                {"<p class='no-announcements'>Please select a company from the dropdown to view its announcements.</p>" if not selected_scrip_code else ""}
             </div>
         </body>
         </html>
@@ -85,26 +604,36 @@ def home():
 @app.route('/health')
 def health_check():
     """Health check endpoint for Render.com."""
+    # Check if the background worker thread is alive
     return jsonify(status="ok", worker_running=worker_thread.is_alive()), 200
 
-# --- Start the Worker in a separate thread ---
-def start_worker_thread_target():
-    """Function to start the BSE monitor worker in a thread."""
-    log_message("Attempting to start BSE monitor worker thread...")
-    # Load initial scrip codes from local CSV for the worker
-    initial_scrip_codes = load_initial_scrip_codes(MONITORED_SCRIPTS_FILE)
-    start_bse_monitor_worker(initial_scrip_codes)
+# --- Worker Thread Setup ---
+worker_thread = threading.Thread(target=start_background_worker, daemon=True)
 
-# Create the worker thread
-worker_thread = threading.Thread(target=start_worker_thread_target, daemon=True)
-
+# --- Initial Setup and App Run ---
 if __name__ == '__main__':
-    # Start the worker thread explicitly when the Flask app is run
+    # Ensure log file exists
+    if not os.path.exists(LOG_FILE):
+        with open(LOG_FILE, "w", encoding="utf-8") as f:
+            f.write(f"--- Application Log started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+
+    log_message("Flask app starting.")
+
+    # Create empty config/cache files if they don't exist on first run
+    if not os.path.exists(CONFIG_FILE):
+        save_config({"scrip_codes": {}})
+    if not os.path.exists(CACHE_FILE):
+        save_seen_ids({})
+
+    # Load initial BSE company list for suggestions
+    load_bse_company_list()
+
+    # Start the background worker thread
     if not worker_thread.is_alive():
         worker_thread.start()
-        log_message("BSE monitor worker thread initiated.")
+        log_message("Background worker thread initiated.")
     else:
-        log_message("BSE monitor worker thread already running.")
+        log_message("Background worker thread already running.")
 
     # Render.com provides the port via an environment variable
     port = int(os.environ.get('PORT', 5000))
