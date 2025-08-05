@@ -9,14 +9,13 @@ import random # For exponential backoff jitter
 import pandas as pd
 from flask import Flask, request, jsonify, render_template_string, url_for, redirect
 from rapidfuzz import process # Import rapidfuzz for fuzzy matching
+from supabase import create_client, Client # Import Supabase client
 
 # --- Global Configuration ---
-# File to store the monitored scrip codes and Telegram chat IDs
-CONFIG_FILE = 'monitored_scripts_config.json' 
-# File to track seen announcements (used by the background worker)
-CACHE_FILE = "seen_announcements.json"
-# File to log all activity
-LOG_FILE = "telegram_log.txt" 
+# Supabase Credentials (fetched from environment variables)
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY") # This is your 'anon' key
+SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL") # This is your full PostgreSQL connection string
 
 # Worker settings
 MAX_RETRIES_MAIN_LOOP = 3 # Max retries for the main scheduling loop
@@ -31,35 +30,55 @@ TELEGRAM_MAX_RETRIES = 5 # Max retries for sending a single Telegram message
 TELEGRAM_RETRY_DELAY_BASE = 5 # Base delay in seconds for exponential backoff
 
 # Global variables for application state
-GLOBAL_MONITORED_SCRIPS = {} # Stores scrip_code: company_name from config file
-GLOBAL_TELEGRAM_CHAT_IDS = [] # Stores a list of Telegram chat IDs
+GLOBAL_MONITORED_SCRIPS = {} # Stores scrip_code: company_name from Supabase
+GLOBAL_TELEGRAM_CHAT_IDS = [] # Stores a list of Telegram chat IDs from Supabase
 GLOBAL_BSE_COMPANY_NAMES = [] # Stores all company names for suggestions (from bse_company_list_cleaned.csv)
 GLOBAL_BSE_DF = pd.DataFrame() # Stores the full BSE company list DataFrame
 
+# Initialize Supabase client
+supabase: Client = None # Will be initialized in main or on first request
+
 app = Flask(__name__)
 
-# --- Core Helper Functions (consolidated from previous scripts) ---
+# --- Core Helper Functions ---
 
 def log_message(message):
-    """Logs messages to a local file with a timestamp."""
+    """Logs messages to console."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"[{timestamp}] {message}\n")
-    print(f"[LOG] {message}") # Also print to console for testing
+    print(f"[LOG] {message}") # Always print to console/Render logs
 
-def send_telegram_message(chat_id, message): # Modified to accept chat_id
+def get_supabase_client():
+    """Initializes and returns the Supabase client."""
+    global supabase
+    if supabase is None:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            log_message("CRITICAL ERROR: Supabase URL or Key not set. Database operations will fail.")
+            return None
+        try:
+            supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+            log_message("Supabase client initialized.")
+        except Exception as e:
+            log_message(f"Error initializing Supabase client: {e}")
+            supabase = None
+    return supabase
+
+def send_telegram_message(chat_id, message):
     """Sends a message to a specific Telegram chat ID with retry logic and logs it."""
+    if not TELEGRAM_BOT_TOKEN:
+        log_message("Telegram bot token is not set. Cannot send message.")
+        return False
+
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
 
     for attempt in range(TELEGRAM_MAX_RETRIES):
         try:
             response = requests.post(url, data=payload, timeout=TELEGRAM_TIMEOUT)
-            response.raise_for_status() # Raises HTTPError for bad responses (4xx or 5xx)
+            response.raise_for_status()
             log_message(f"Telegram message sent successfully to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {message}")
-            return True # Message sent successfully
+            return True
         except requests.exceptions.Timeout as e:
-            delay = (TELEGRAM_RETRY_DELAY_BASE * (2 ** attempt)) + random.uniform(0, 1) # Exponential backoff with jitter
+            delay = (TELEGRAM_RETRY_DELAY_BASE * (2 ** attempt)) + random.uniform(0, 1)
             log_message(f"Telegram send timeout to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. Retrying in {delay:.2f} seconds.")
             time.sleep(delay)
         except requests.exceptions.RequestException as e:
@@ -68,50 +87,112 @@ def send_telegram_message(chat_id, message): # Modified to accept chat_id
             time.sleep(delay)
         except Exception as e:
             log_message(f"Unexpected error sending Telegram message to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. No further retries for this attempt.")
-            break # Break on unexpected errors not related to requests
+            break
 
     log_message(f"Failed to send Telegram message to {chat_id} after {TELEGRAM_MAX_RETRIES} attempts: {message}")
-    return False # Message failed after all retries
+    return False
 
-def load_config():
-    """Loads scrip codes and chat IDs from the JSON config file."""
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r') as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            log_message(f"Warning: Could not decode JSON from {CONFIG_FILE}. Returning empty config.")
-            return {"scrip_codes": {}, "telegram_chat_ids": []} # Ensure default includes chat_ids
-    return {"scrip_codes": {}, "telegram_chat_ids": []} # Default empty structure if file doesn't exist
+def load_config_from_db():
+    """Loads scrip codes and chat IDs from Supabase database."""
+    client = get_supabase_client()
+    if not client: return {"scrip_codes": {}, "telegram_chat_ids": []}
 
-def save_config(config_data):
-    """Saves scrip codes and chat IDs to the JSON config file."""
+    scrip_codes = {}
+    telegram_chat_ids = []
+
     try:
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(config_data, f, indent=4)
-        log_message(f"Config saved to {CONFIG_FILE}.")
+        # Fetch monitored scrips
+        response_scrips = client.table('monitored_scrips').select('bse_code,company_name').execute()
+        if response_scrips.data:
+            for item in response_scrips.data:
+                scrip_codes[item['bse_code']] = item['company_name']
+        log_message(f"Loaded {len(scrip_codes)} scrip codes from Supabase.")
+
+        # Fetch telegram recipients
+        response_chats = client.table('telegram_recipients').select('chat_id').execute()
+        if response_chats.data:
+            telegram_chat_ids = [item['chat_id'] for item in response_chats.data]
+        log_message(f"Loaded {len(telegram_chat_ids)} chat IDs from Supabase.")
+
     except Exception as e:
-        log_message(f"Error saving config to {CONFIG_FILE}: {e}")
+        log_message(f"Error loading config from Supabase: {e}")
+    
+    return {"scrip_codes": scrip_codes, "telegram_chat_ids": telegram_chat_ids}
 
-def load_seen_ids():
-    """Loads previously seen announcement IDs from a JSON cache file."""
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r") as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            log_message(f"Warning: Could not decode JSON from {CACHE_FILE}. Starting with empty cache.")
-            return {}
-    return {}
-
-def save_seen_ids(data):
-    """Saves current seen announcement IDs to a JSON cache file."""
+def save_scrip_to_db(bse_code, company_name):
+    """Adds a scrip code to the database."""
+    client = get_supabase_client()
+    if not client: return False, "Supabase client not initialized."
     try:
-        with open(CACHE_FILE, "w") as f:
-            json.dump(data, f)
-        log_message(f"Seen IDs saved to {CACHE_FILE}.")
+        data, count = client.table('monitored_scrips').insert({"bse_code": bse_code, "company_name": company_name}).execute()
+        log_message(f"Added scrip {bse_code} to Supabase.")
+        return True, "Scrip added successfully."
     except Exception as e:
-        log_message(f"Error saving seen IDs to {CACHE_FILE}: {e}")
+        log_message(f"Error adding scrip {bse_code} to Supabase: {e}")
+        return False, str(e)
+
+def remove_scrip_from_db(bse_code):
+    """Removes a scrip code from the database."""
+    client = get_supabase_client()
+    if not client: return False, "Supabase client not initialized."
+    try:
+        data, count = client.table('monitored_scrips').delete().eq('bse_code', bse_code).execute()
+        log_message(f"Removed scrip {bse_code} from Supabase.")
+        return True, "Scrip removed successfully."
+    except Exception as e:
+        log_message(f"Error removing scrip {bse_code} from Supabase: {e}")
+        return False, str(e)
+
+def add_chat_id_to_db(chat_id):
+    """Adds a Telegram chat ID to the database."""
+    client = get_supabase_client()
+    if not client: return False, "Supabase client not initialized."
+    try:
+        data, count = client.table('telegram_recipients').insert({"chat_id": chat_id}).execute()
+        log_message(f"Added chat ID {chat_id} to Supabase.")
+        return True, "Chat ID added successfully."
+    except Exception as e:
+        log_message(f"Error adding chat ID {chat_id} to Supabase: {e}")
+        return False, str(e)
+
+def remove_chat_id_from_db(chat_id):
+    """Removes a Telegram chat ID from the database."""
+    client = get_supabase_client()
+    if not client: return False, "Supabase client not initialized."
+    try:
+        data, count = client.table('telegram_recipients').delete().eq('chat_id', chat_id).execute()
+        log_message(f"Removed chat ID {chat_id} from Supabase.")
+        return True, "Chat ID removed successfully."
+    except Exception as e:
+        log_message(f"Error removing chat ID {chat_id} from Supabase: {e}")
+        return False, str(e)
+
+def load_seen_ids_from_db(scrip_code):
+    """Loads previously seen announcement IDs for a scrip from Supabase."""
+    client = get_supabase_client()
+    if not client: return []
+    try:
+        response = client.table('seen_announcements').select('news_id').eq('scrip_code', scrip_code).execute()
+        return [item['news_id'] for item in response.data]
+    except Exception as e:
+        log_message(f"Error loading seen IDs for {scrip_code} from Supabase: {e}")
+        return []
+
+def save_new_seen_id_to_db(scrip_code, news_id):
+    """Saves a new seen announcement ID to Supabase."""
+    client = get_supabase_client()
+    if not client: return False
+    try:
+        data, count = client.table('seen_announcements').insert({"scrip_code": scrip_code, "news_id": news_id}).execute()
+        log_message(f"Saved new seen ID {news_id} for {scrip_code} to Supabase.")
+        return True
+    except Exception as e:
+        # Log unique constraint errors more gently
+        if "duplicate key value violates unique constraint" in str(e):
+            log_message(f"Info: Attempted to save duplicate seen ID {news_id} for {scrip_code}. Already exists.")
+        else:
+            log_message(f"Error saving new seen ID {news_id} for {scrip_code} to Supabase: {e}")
+        return False
 
 def get_bse_announcements(scrip_code, num_announcements=15):
     """
@@ -179,19 +260,16 @@ def get_bse_announcements(scrip_code, num_announcements=15):
         log_message(f"An unexpected error occurred in get_bse_announcements for {scrip_code}:\n{e}")
         return []
 
-def get_suggestions_from_list(query, limit=5): # Renamed to avoid conflict with Flask route
+def get_suggestions_from_list(query, limit=5):
     """
     Provides company name suggestions based on a query using loaded data.
     """
     if not GLOBAL_BSE_DF.empty and 'Company Name' in GLOBAL_BSE_DF.columns:
-        # Use rapidfuzz's process.extract to get fuzzy matches
-        # extract returns (match, score, index)
         matches = process.extract(query, GLOBAL_BSE_DF["Company Name"].tolist(), limit=limit)
         
         results = []
         for match_name, score, index in matches:
-            # Ensure score is above a certain threshold to avoid irrelevant suggestions
-            if score > 75: # Adjust threshold as needed (0-100)
+            if score > 75:
                 bse_code = str(GLOBAL_BSE_DF.iloc[index]["BSE Code"])
                 results.append({"bse_code": bse_code, "company_name": match_name})
         return results
@@ -202,7 +280,7 @@ def load_bse_company_list():
     Loads the BSE company list for suggestions.
     """
     global GLOBAL_BSE_DF, GLOBAL_BSE_COMPANY_NAMES
-    bse_company_list_file = "bse_company_list_cleaned.csv" # Assuming this file is present in deployment
+    bse_company_list_file = "bse_company_list_cleaned.csv"
 
     try:
         if os.path.exists(bse_company_list_file):
@@ -220,23 +298,22 @@ def load_bse_company_list():
 
 # --- Background Worker Logic ---
 
-def reload_monitored_scrip_codes_from_config_file():
-    """Task to periodically reload the monitored scrip codes and chat IDs from the local JSON config."""
+def reload_monitored_scrip_codes_from_db_task():
+    """Task to periodically reload the monitored scrip codes and chat IDs from Supabase."""
     global GLOBAL_MONITORED_SCRIPS, GLOBAL_TELEGRAM_CHAT_IDS
-    new_config = load_config()
+    new_config = load_config_from_db() # Use DB load function
     if new_config:
         GLOBAL_MONITORED_SCRIPS = new_config.get("scrip_codes", {})
         GLOBAL_TELEGRAM_CHAT_IDS = new_config.get("telegram_chat_ids", [])
-        log_message(f"Successfully reloaded {len(GLOBAL_MONITORED_SCRIPS)} scrip codes and {len(GLOBAL_TELEGRAM_CHAT_IDS)} chat IDs from local config.")
+        log_message(f"Successfully reloaded {len(GLOBAL_MONITORED_SCRIPS)} scrip codes and {len(GLOBAL_TELEGRAM_CHAT_IDS)} chat IDs from Supabase config.")
     else:
-        log_message("Warning: Failed to reload config. Keeping previous lists.")
+        log_message("Warning: Failed to reload config from Supabase. Keeping previous lists.")
 
 def check_for_new_announcements_task():
     """
     The main task function that will be scheduled to run periodically.
     It fetches, filters, and sends new announcements.
     """
-    seen = load_seen_ids()
     
     current_time = datetime.now()
     cutoff_date = current_time - timedelta(days=DAYS_TO_FETCH)
@@ -256,9 +333,9 @@ def check_for_new_announcements_task():
             log_message(f"Worker: No announcements fetched for scrip code {scrip_code}.")
             continue
 
-        if scrip_code not in seen:
-            seen[scrip_code] = {} # Initialize as dictionary for news_id tracking
-
+        # Load seen IDs for this specific scrip from DB
+        seen_news_ids_for_scrip = load_seen_ids_from_db(scrip_code)
+        
         new_items_for_scrip = []
         for ann in anns:
             ann_full_date_str = ann.get('Date', '')
@@ -278,24 +355,24 @@ def check_for_new_announcements_task():
                 if ann_date.date() >= cutoff_date.date():
                     news_id = ann['XBRL Link'].split("Bsenewid=")[-1].split("&")[0] if "Bsenewid=" in ann['XBRL Link'] else ann['Title'] + ann['Date']
 
-                    if news_id not in seen.get(scrip_code, {}): # Use .get() to safely check nested dict
-                        seen.setdefault(scrip_code, {})[news_id] = True # Set default and mark as seen
+                    if news_id not in seen_news_ids_for_scrip:
+                        # Save new news_id to DB
+                        save_new_seen_id_to_db(scrip_code, news_id) 
                         new_items_for_scrip.append(ann)
                         log_message(f"Worker: Found new announcement for {scrip_code} ({company_name}): {ann['Title']}")
                         new_announcements_found_this_cycle = True
             else:
-                log_message(f"Worker: Announcement for {scrip_code} has unparsable date format '{ann_full_date_str}'. Skipping this announcement.")
+                log_message(f"Worker: Announcement for {scrip_code} on {ann_date.strftime('%Y-%m-%d')} is older than {DAYS_TO_FETCH} days. Skipping.")
 
         # Send messages to all configured Telegram chat IDs
         if new_items_for_scrip and GLOBAL_TELEGRAM_CHAT_IDS:
             for chat_id in GLOBAL_TELEGRAM_CHAT_IDS:
                 for ann in new_items_for_scrip:
                     msg_text = f"📢 {ann['Title']}\n🕒 {ann['Date']}\n🔗 {ann['PDF Link']}"
-                    send_telegram_message(chat_id, msg_text) # Pass chat_id here
+                    send_telegram_message(chat_id, msg_text)
         elif new_items_for_scrip and not GLOBAL_TELEGRAM_CHAT_IDS:
             log_message("Worker: New announcements found, but no Telegram chat IDs configured.")
 
-    save_seen_ids(seen)
     if not new_announcements_found_this_cycle:
         log_message("Worker: No new announcements found in this cycle.")
     log_message(f"Worker: Monitoring cycle completed.")
@@ -307,8 +384,8 @@ def start_background_worker():
     """
     log_message("Background worker thread started.")
 
-    # Initial load of scrip codes and chat IDs for the worker
-    reload_monitored_scrip_codes_from_config_file()
+    # Initial load of scrip codes and chat IDs for the worker from DB
+    reload_monitored_scrip_codes_from_db_task()
     
     # Run the task immediately on startup
     check_for_new_announcements_task()
@@ -317,7 +394,7 @@ def start_background_worker():
     schedule.every(5).minutes.do(check_for_new_announcements_task)
     
     # Schedule the config reloading task (e.g., every 1 minute for quick updates)
-    schedule.every(1).minutes.do(reload_monitored_scrip_codes_from_config_file) 
+    schedule.every(1).minutes.do(reload_monitored_scrip_codes_from_db_task) 
 
     retries = 0
     while True:
@@ -339,11 +416,10 @@ def start_background_worker():
 @app.route('/')
 def index():
     """Admin panel homepage with scrip management and links to manage chat IDs and view announcements."""
-    current_config = load_config()
+    current_config = load_config_from_db() # Load from DB for UI
     scrip_codes = current_config.get("scrip_codes", {})
     telegram_chat_ids = current_config.get("telegram_chat_ids", [])
     
-    # Simple HTML template for the admin panel
     return render_template_string("""
         <!DOCTYPE html>
         <html lang="en">
@@ -602,200 +678,247 @@ def index():
         </html>
     """)
 
-@app.route('/api/config', methods=['GET'])
-def get_config_api():
-    """API endpoint to get the current configuration (scrip codes and chat IDs)."""
-    return jsonify(load_config())
+    @app.route('/api/config', methods=['GET'])
+    def get_config_api():
+        """API endpoint to get the current configuration (scrip codes and chat IDs)."""
+        return jsonify(load_config_from_db()) # Use DB load
 
-@app.route('/api/config', methods=['POST'])
-def manage_config_api():
-    """API endpoint to add or remove scrip codes or Telegram chat IDs."""
-    data = request.get_json()
-    action = data.get('action') # 'add' or 'remove'
-    item_type = data.get('type') # 'scrip' or 'chat_id'
+    @app.route('/api/config', methods=['POST'])
+    def manage_config_api():
+        """API endpoint to add or remove scrip codes or Telegram chat IDs."""
+        data = request.get_json()
+        action = data.get('action') # 'add' or 'remove'
+        item_type = data.get('type') # 'scrip' or 'chat_id'
 
-    current_config_data = load_config() # Always load the latest to avoid race conditions
+        if item_type == 'scrip':
+            bse_code = data.get('bse_code')
+            company_name = data.get('company_name')
+            if action == 'add':
+                success, msg = save_scrip_to_db(bse_code, company_name) # Use DB save
+                if success:
+                    return jsonify({"message": msg}), 200
+                else:
+                    status_code = 409 if "duplicate key" in msg else 500
+                    return jsonify({"message": msg}), status_code
+            
+            elif action == 'remove':
+                success, msg = remove_scrip_from_db(bse_code) # Use DB remove
+                if success:
+                    return jsonify({"message": msg}), 200
+                else:
+                    status_code = 404 if "not found" in msg else 500
+                    return jsonify({"message": msg}), status_code
+            
+            else:
+                return jsonify({"message": "Invalid scrip action. Use 'add' or 'remove'."}), 400
 
-    if item_type == 'scrip':
-        bse_code = data.get('bse_code')
-        company_name = data.get('company_name')
-        if action == 'add':
-            if not bse_code or not company_name:
-                return jsonify({"message": "BSE Code and Company Name are required."}), 400
-            if bse_code in current_config_data["scrip_codes"]:
-                return jsonify({"message": f"Scrip code {bse_code} already exists."}), 409
+        elif item_type == 'chat_id':
+            chat_id = data.get('chat_id')
+            if action == 'add':
+                success, msg = add_chat_id_to_db(chat_id) # Use DB add
+                if success:
+                    return jsonify({"message": msg}), 200
+                else:
+                    status_code = 409 if "duplicate key" in msg else 500
+                    return jsonify({"message": msg}), status_code
             
-            current_config_data["scrip_codes"][bse_code] = company_name
-            save_config(current_config_data)
-            return jsonify({"message": f"Scrip code {bse_code} ({company_name}) added successfully."}), 200
-        
-        elif action == 'remove':
-            if not bse_code:
-                return jsonify({"message": "BSE Code is required for removal."}), 400
-            if bse_code not in current_config_data["scrip_codes"]:
-                return jsonify({"message": f"Scrip code {bse_code} not found."}), 404
+            elif action == 'remove':
+                success, msg = remove_chat_id_from_db(chat_id) # Use DB remove
+                if success:
+                    return jsonify({"message": msg}), 200
+                else:
+                    status_code = 404 if "not found" in msg else 500
+                    return jsonify({"message": msg}), status_code
             
-            del current_config_data["scrip_codes"][bse_code]
-            save_config(current_config_data)
-            return jsonify({"message": f"Scrip code {bse_code} removed successfully."}), 200
-        
-        else:
-            return jsonify({"message": "Invalid scrip action. Use 'add' or 'remove'."}), 400
-
-    elif item_type == 'chat_id':
-        chat_id = data.get('chat_id')
-        if action == 'add':
-            if not chat_id:
-                return jsonify({"message": "Chat ID is required."}), 400
-            if chat_id in current_config_data["telegram_chat_ids"]:
-                return jsonify({"message": f"Chat ID {chat_id} already exists."}), 409
-            
-            current_config_data["telegram_chat_ids"].append(chat_id)
-            save_config(current_config_data)
-            return jsonify({"message": f"Chat ID {chat_id} added successfully."}), 200
-        
-        elif action == 'remove':
-            if not chat_id:
-                return jsonify({"message": "Chat ID is required for removal."}), 400
-            if chat_id not in current_config_data["telegram_chat_ids"]:
-                return jsonify({"message": f"Chat ID {chat_id} not found."}), 404
-            
-            current_config_data["telegram_chat_ids"].remove(chat_id)
-            save_config(current_config_data)
-            return jsonify({"message": f"Chat ID {chat_id} removed successfully."}), 200
+            else:
+                return jsonify({"message": "Invalid chat ID action. Use 'add' or 'remove'."}), 400
         
         else:
-            return jsonify({"message": "Invalid chat ID action. Use 'add' or 'remove'."}), 400
-    
-    else:
-        return jsonify({"message": "Invalid item type. Use 'scrip' or 'chat_id'."}), 400
+            return jsonify({"message": "Invalid item type. Use 'scrip' or 'chat_id'."}), 400
 
-@app.route('/api/suggest_company', methods=['GET'])
-def suggest_company_api():
-    """API endpoint for fuzzy company name suggestions."""
-    query = request.args.get('query', '').strip()
-    if not query:
-        return jsonify([])
-    
-    suggestions = get_suggestions_from_list(query, limit=10) # Get up to 10 suggestions
-    return jsonify(suggestions)
+    @app.route('/api/suggest_company', methods=['GET'])
+    def suggest_company_api():
+        """API endpoint for fuzzy company name suggestions."""
+        query = request.args.get('query', '').strip()
+        if not query:
+            return jsonify([])
+        
+        suggestions = get_suggestions_from_list(query, limit=10) # Get up to 10 suggestions
+        return jsonify(suggestions)
 
-@app.route('/announcements', methods=['GET'])
-def view_announcements():
-    """
-    Displays announcements for a selected scrip code in an HTML table.
-    Allows selection of scrip code via a dropdown.
-    """
-    selected_scrip_code = request.args.get('scrip_code')
-    announcements_to_display = []
-    company_name_for_display = "Select a Company"
+    @app.route('/announcements', methods=['GET'])
+    def view_announcements():
+        """
+        Displays announcements for a selected scrip code in an HTML table.
+        Allows selection of scrip code via a dropdown.
+        """
+        selected_scrip_code = request.args.get('scrip_code')
+        announcements_to_display = []
+        company_name_for_display = "Select a Company"
 
-    # Ensure GLOBAL_MONITORED_SCRIPS is up-to-date for the dropdown
-    current_config_for_ui = load_config()
-    GLOBAL_MONITORED_SCRIPS.update(current_config_for_ui.get("scrip_codes", {}))
-
-    if selected_scrip_code:
-        company_name_for_display = GLOBAL_MONITORED_SCRIPS.get(selected_scrip_code, f"Unknown ({selected_scrip_code})")
-        announcements_to_display = get_bse_announcements(selected_scrip_code, num_announcements=20) # Fetch up to 20 recent
-        log_message(f"Web UI: Fetched {len(announcements_to_display)} announcements for {company_name_for_display}.")
-    
-    # Generate options for the dropdown
-    scrip_options_html = ""
-    for code, name in GLOBAL_MONITORED_SCRIPS.items():
-        selected = "selected" if code == selected_scrip_code else ""
-        scrip_options_html += f"<option value='{code}' {selected}>{name} ({code})</option>"
-
-    return render_template_string(f"""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>View Announcements</title>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-            <style>
-                body {{ font-family: 'Inter', sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; color: #333; }}
-                .container {{ max-width: 900px; margin: 20px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
-                h1, h2 {{ color: #10486b; text-align: center; margin-bottom: 25px; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }}
-                h2 {{ margin-top: 30px; }}
-                .back-link {{ display: block; text-align: center; margin-bottom: 20px; color: #007bff; text-decoration: none; font-weight: bold; }}
-                .back-link:hover {{ text-decoration: underline; }}
-                .select-scrip-form {{ display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #f9f9f9; }}
-                select, button {{ padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 1em; }}
-                button {{ background-color: #007bff; color: white; cursor: pointer; border: none; font-weight: bold; transition: background-color 0.3s ease; }}
-                button:hover {{ background-color: #0056b3; }}
-                .announcement-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-                .announcement-table th, .announcement-table td {{ border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }}
-                .announcement-table th {{ background-color: #e9ecef; color: #10486b; }}
-                .announcement-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
-                .announcement-table a {{ color: #007bff; text-decoration: none; }}
-                .announcement-table a:hover {{ text-decoration: underline; }}
-                .no-announcements {{ text-align: center; padding: 20px; color: #666; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <a href="{url_for('index')}" class="back-link">&larr; Back to Admin Home</a>
-                <h1>Announcements for {company_name_for_display}</h1>
-
-                <form class="select-scrip-form" action="{url_for('view_announcements')}" method="GET">
-                    <label for="scrip_select">Select Company:</label>
-                    <select id="scrip_select" name="scrip_code" onchange="this.form.submit()">
-                        <option value="">-- Select a Company --</option>
-                        {scrip_options_html}
-                    </select>
-                </form>
-
-                {"<table class='announcement-table'><thead><tr><th>Date & Time</th><th>Title</th><th>PDF Link</th><th>XBRL Link</th></tr></thead><tbody>" if announcements_to_display else ""}
-                {"".join([
-                    f"<tr><td>{ann.get('Date')}</td><td>{ann.get('Title')}</td><td><a href='{ann.get('PDF Link')}' target='_blank'>View PDF</a></td><td><a href='{ann.get('XBRL Link')}' target='_blank'>View XBRL</a></td></tr>"
-                    for ann in announcements_to_display
-                ]) if announcements_to_display else ""}
-                {"</tbody></table>" if announcements_to_display else ""}
-
-                {"<p class='no-announcements'>No announcements found for selected company or in the last 90 days.</p>" if not announcements_to_display and selected_scrip_code else ""}
-                {"<p class='no-announcements'>Please select a company from the dropdown to view its announcements.</p>" if not selected_scrip_code else ""}
-            </div>
-        </body>
-        </html>
-    """)
-
-@app.route('/health')
-def health_check():
-    """Health check endpoint for Render.com."""
-    # Check if the background worker thread is alive
-    return jsonify(status="ok", worker_running=worker_thread.is_alive()), 200
-
-# --- Worker Thread Setup ---
-worker_thread = threading.Thread(target=start_background_worker, daemon=True)
-
-# --- Initial Setup and App Run ---
-if __name__ == '__main__':
-    # Ensure log file exists
-    if not os.path.exists(LOG_FILE):
-        with open(LOG_FILE, "w", encoding="utf-8") as f:
-            f.write(f"--- Application Log started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
-
-    log_message("Flask app starting.")
-
-    # Create empty config/cache files if they don't exist on first run
-    if not os.path.exists(CONFIG_FILE):
-        save_config({"scrip_codes": {}, "telegram_chat_ids": []}) # Initialize with empty chat_ids list
-    if not os.path.exists(CACHE_FILE):
-        save_seen_ids({})
-
-    # Load initial BSE company list for suggestions (only once at startup)
-    load_bse_company_list()
-
-    # Start the background worker thread
-    if not worker_thread.is_alive():
-        worker_thread.start()
-        log_message("Background worker thread initiated.")
-    else:
-        log_message("Background worker thread already running.")
-
-    # Render.com provides the port via an environment variable
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+        # Ensure GLOBAL_MONITORED_SCRIPS is up-to-date for the dropdown
+        # This will be populated by the worker's scheduled reload, but also fetch here for immediate UI consistency
+        current_config_for_ui = load_config_from_db()
+        GLOBAL_MONITORED_SCRIPS.update(current_config_for_ui.get("scrip_codes", {}))
 
 
+        if selected_scrip_code:
+            company_name_for_display = GLOBAL_MONITORED_SCRIPS.get(selected_scrip_code, f"Unknown ({selected_scrip_code})")
+            announcements_to_display = get_bse_announcements(selected_scrip_code, num_announcements=20) # Fetch up to 20 recent
+            log_message(f"Web UI: Fetched {len(announcements_to_display)} announcements for {company_name_for_display}.")
+        
+        # Generate options for the dropdown
+        scrip_options_html = ""
+        for code, name in GLOBAL_MONITORED_SCRIPS.items():
+            selected = "selected" if code == selected_scrip_code else ""
+            scrip_options_html += f"<option value='{code}' {selected}>{name} ({code})</option>"
+
+        return render_template_string(f"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>View Announcements</title>
+                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+                <style>
+                    body {{ font-family: 'Inter', sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; color: #333; }}
+                    .container {{ max-width: 900px; margin: 20px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
+                    h1, h2 {{ color: #10486b; text-align: center; margin-bottom: 25px; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }}
+                    h2 {{ margin-top: 30px; }}
+                    .back-link {{ display: block; text-align: center; margin-bottom: 20px; color: #007bff; text-decoration: none; font-weight: bold; }}
+                    .back-link:hover {{ text-decoration: underline; }}
+                    .select-scrip-form {{ display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #f9f9f9; }}
+                    select, button {{ padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 1em; }}
+                    button {{ background-color: #007bff; color: white; cursor: pointer; border: none; font-weight: bold; transition: background-color 0.3s ease; }}
+                    button:hover {{ background-color: #0056b3; }}
+                    .announcement-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+                    .announcement-table th, .announcement-table td {{ border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }}
+                    .announcement-table th {{ background-color: #e9ecef; color: #10486b; }}
+                    .announcement-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
+                    .announcement-table a {{ color: #007bff; text-decoration: none; }}
+                    .announcement-table a:hover {{ text-decoration: underline; }}
+                    .no-announcements {{ text-align: center; padding: 20px; color: #666; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <a href="{url_for('index')}" class="back-link">&larr; Back to Admin Home</a>
+                    <h1>Announcements for {company_name_for_display}</h1>
+
+                    <form class="select-scrip-form" action="{url_for('view_announcements')}" method="GET">
+                        <label for="scrip_select">Select Company:</label>
+                        <select id="scrip_select" name="scrip_code" onchange="this.form.submit()">
+                            <option value="">-- Select a Company --</option>
+                            {scrip_options_html}
+                        </select>
+                    </form>
+
+                    {"<table class='announcement-table'><thead><tr><th>Date & Time</th><th>Title</th><th>PDF Link</th><th>XBRL Link</th></tr></thead><tbody>" if announcements_to_display else ""}
+                    {"".join([
+                        f"<tr><td>{ann.get('Date')}</td><td>{ann.get('Title')}</td><td><a href='{ann.get('PDF Link')}' target='_blank'>View PDF</a></td><td><a href='{ann.get('XBRL Link')}' target='_blank'>View XBRL</a></td></tr>"
+                        for ann in announcements_to_display
+                    ]) if announcements_to_display else ""}
+                    {"</tbody></table>" if announcements_to_display else ""}
+
+                    {"<p class='no-announcements'>No announcements found for selected company or in the last 90 days.</p>" if not announcements_to_display and selected_scrip_code else ""}
+                    {"<p class='no-announcements'>Please select a company from the dropdown to view its announcements.</p>" if not selected_scrip_code else ""}
+                </div>
+            </body>
+            </html>
+        """)
+
+    @app.route('/health')
+    def health_check():
+        """Health check endpoint for Render.com."""
+        # Check if the background worker thread is alive
+        return jsonify(status="ok", worker_running=worker_thread.is_alive()), 200
+
+    # --- Worker Thread Setup ---
+    worker_thread = threading.Thread(target=start_background_worker, daemon=True)
+
+    # --- Initial Setup and App Run ---
+    if __name__ == '__main__':
+        # Initialize Supabase client globally
+        get_supabase_client()
+
+        # Ensure log file exists (still useful for general app logs)
+        # Note: If you want these logs to persist, you'd need a Render Disk or external logging service.
+        # For now, it's just printing to Render's ephemeral stdout.
+        # You could also consider sending critical logs to Telegram.
+        # os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True) # Not needed if not writing to file
+        # with open(LOG_FILE, "w", encoding="utf-8") as f:
+        #     f.write(f"--- Application Log started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+
+        log_message("Flask app starting.")
+
+        # Load initial BSE company list for suggestions (from local CSV)
+        load_bse_company_list()
+
+        # Start the background worker thread
+        if not worker_thread.is_alive():
+            worker_thread.start()
+            log_message("Background worker thread initiated.")
+        else:
+            log_message("Background worker thread already running.")
+
+        # Render.com provides the port via an environment variable
+        port = int(os.environ.get('PORT', 5000))
+        app.run(host='0.0.0.0', port=port)
+```
+
+---
+
+### Key Changes in `app.py`:
+
+1.  **Supabase Imports and Global Client:**
+    ```python
+    from supabase import create_client, Client # New import
+    supabase: Client = None # Global client instance
+    ```
+2.  **Supabase Environment Variables:**
+    ```python
+    SUPABASE_URL = os.environ.get("SUPABASE_URL")
+    SUPABASE_KEY = os.environ.get("SUPABASE_KEY") # This is your 'anon' key
+    SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL") # For psycopg2, though not directly used by supabase-py client
+    ```
+3.  **`get_supabase_client()`:** A new helper function to initialize the Supabase client once and reuse it.
+4.  **Replaced File I/O with Database Operations:**
+    * **`load_config_from_db()`:** Fetches all scrips from the `monitored_scrips` table and all chat IDs from the `telegram_recipients` table.
+    * **`save_scrip_to_db()` / `remove_scrip_from_db()`:** Inserts/deletes scrips from the `monitored_scrips` table.
+    * **`add_chat_id_to_db()` / `remove_chat_id_from_db()`:** Inserts/deletes chat IDs from the `telegram_recipients` table.
+    * **`load_seen_ids_from_db()`:** Fetches `news_id`s for a specific `scrip_code` from the `seen_announcements` table.
+    * **`save_new_seen_id_to_db()`:** Inserts a new `news_id` into the `seen_announcements` table. It includes basic error handling for duplicate entries (which Supabase's `UNIQUE` constraint will prevent).
+5.  **Worker Logic Updates:**
+    * `reload_monitored_scrip_codes_from_config_file` is renamed to `reload_monitored_scrip_codes_from_db_task` and now calls `load_config_from_db()`.
+    * `check_for_new_announcements_task` now uses `load_seen_ids_from_db()` and `save_new_seen_id_to_db()` for persistence.
+6.  **Flask Routes Updates:**
+    * `/api/config` GET and POST routes now call the respective `_db` functions (`load_config_from_db`, `save_scrip_to_db`, etc.).
+    * The `index()` and `view_announcements()` routes also use `load_config_from_db()` to display current data.
+7.  **Removed Local File Operations for Persistence:** The `os.makedirs(PERSISTENT_DIR, exist_ok=True)` and file-based `CONFIG_FILE`, `CACHE_FILE`, `LOG_FILE` are no longer used for persistence (though `LOG_FILE` still points to console output, which Render captures).
+
+---
+
+## 3. Deployment Steps on Render.com 🚀
+
+1.  **Update `app.py`:** Replace the entire content of your `app.py` with the code provided in the Canvas above.
+2.  **Update `requirements.txt`:** Add the Supabase Python client library:
+    ```
+    Flask
+    requests
+    schedule
+    pandas
+    rapidfuzz
+    supabase-py # Add this line
+    ```
+3.  **Set Environment Variables on Render.com:**
+    * Go to your Render Dashboard -> Your Web Service -> **"Environment"** tab.
+    * Add these new environment variables (if you haven't already added `TELEGRAM_BOT_TOKEN`):
+        * **`SUPABASE_URL`**: Your project URL from Supabase Project Settings -> API.
+        * **`SUPABASE_KEY`**: Your `anon` (public) `key` from Supabase Project Settings -> API.
+        * **`SUPABASE_DB_URL`**: Your PostgreSQL connection string from Supabase Database -> Connection String (for Python).
+        * **`TELEGRAM_BOT_TOKEN`**: Your Telegram Bot Token.
+4.  **Ensure `bse_company_list_cleaned.csv` is present:** This file is still needed for fuzzy search suggestions and should be in your repository.
+5.  **Commit and Push:** Commit all these changes to your Git repository and push them. Render.com will automatically rebuild and redeploy your service.
+
+After deployment, your Flask app will now use Supabase for all persistent data storage! You can verify this by adding scrips and chat IDs, then manually restarting your Render service. The data should rema
