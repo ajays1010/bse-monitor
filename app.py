@@ -52,7 +52,7 @@ def get_supabase_client():
     global supabase
     if supabase is None:
         if not SUPABASE_URL or not SUPABASE_KEY:
-            log_message("CRITICAL ERROR: Supabase URL or Key not set. Database operations will fail.")
+            log_message("CRITICAL ERROR: Supabase URL or Key not set. Database operations will follow.")
             return None
         try:
             supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -280,7 +280,7 @@ def load_bse_company_list():
     Loads the BSE company list for suggestions.
     """
     global GLOBAL_BSE_DF, GLOBAL_BSE_COMPANY_NAMES
-    bse_company_list_file = "bse_company_list_cleaned.csv"
+    bse_company_list_file = "bse_company_list_cleaned.csv" # Assuming this file is present in deployment
 
     try:
         if os.path.exists(bse_company_list_file):
@@ -852,7 +852,13 @@ def index():
 
         log_message("Flask app starting.")
 
-        # Load initial BSE company list for suggestions (from local CSV)
+        # Create empty config/cache files if they don't exist on first run
+        if not os.path.exists(CONFIG_FILE):
+            save_config({"scrip_codes": {}})
+        if not os.path.exists(CACHE_FILE):
+            save_seen_ids({})
+
+        # Load initial BSE company list for suggestions
         load_bse_company_list()
 
         # Start the background worker thread
@@ -865,60 +871,3 @@ def index():
         # Render.com provides the port via an environment variable
         port = int(os.environ.get('PORT', 5000))
         app.run(host='0.0.0.0', port=port)
-```
-
----
-
-### Key Changes in `app.py`:
-
-1.  **Supabase Imports and Global Client:**
-    ```python
-    from supabase import create_client, Client # New import
-    supabase: Client = None # Global client instance
-    ```
-2.  **Supabase Environment Variables:**
-    ```python
-    SUPABASE_URL = os.environ.get("SUPABASE_URL")
-    SUPABASE_KEY = os.environ.get("SUPABASE_KEY") # This is your 'anon' key
-    SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL") # For psycopg2, though not directly used by supabase-py client
-    ```
-3.  **`get_supabase_client()`:** A new helper function to initialize the Supabase client once and reuse it.
-4.  **Replaced File I/O with Database Operations:**
-    * **`load_config_from_db()`:** Fetches all scrips from the `monitored_scrips` table and all chat IDs from the `telegram_recipients` table.
-    * **`save_scrip_to_db()` / `remove_scrip_from_db()`:** Inserts/deletes scrips from the `monitored_scrips` table.
-    * **`add_chat_id_to_db()` / `remove_chat_id_from_db()`:** Inserts/deletes chat IDs from the `telegram_recipients` table.
-    * **`load_seen_ids_from_db()`:** Fetches `news_id`s for a specific `scrip_code` from the `seen_announcements` table.
-    * **`save_new_seen_id_to_db()`:** Inserts a new `news_id` into the `seen_announcements` table. It includes basic error handling for duplicate entries (which Supabase's `UNIQUE` constraint will prevent).
-5.  **Worker Logic Updates:**
-    * `reload_monitored_scrip_codes_from_config_file` is renamed to `reload_monitored_scrip_codes_from_db_task` and now calls `load_config_from_db()`.
-    * `check_for_new_announcements_task` now uses `load_seen_ids_from_db()` and `save_new_seen_id_to_db()` for persistence.
-6.  **Flask Routes Updates:**
-    * `/api/config` GET and POST routes now call the respective `_db` functions (`load_config_from_db`, `save_scrip_to_db`, etc.).
-    * The `index()` and `view_announcements()` routes also use `load_config_from_db()` to display current data.
-7.  **Removed Local File Operations for Persistence:** The `os.makedirs(PERSISTENT_DIR, exist_ok=True)` and file-based `CONFIG_FILE`, `CACHE_FILE`, `LOG_FILE` are no longer used for persistence (though `LOG_FILE` still points to console output, which Render captures).
-
----
-
-## 3. Deployment Steps on Render.com 🚀
-
-1.  **Update `app.py`:** Replace the entire content of your `app.py` with the code provided in the Canvas above.
-2.  **Update `requirements.txt`:** Add the Supabase Python client library:
-    ```
-    Flask
-    requests
-    schedule
-    pandas
-    rapidfuzz
-    supabase-py # Add this line
-    ```
-3.  **Set Environment Variables on Render.com:**
-    * Go to your Render Dashboard -> Your Web Service -> **"Environment"** tab.
-    * Add these new environment variables (if you haven't already added `TELEGRAM_BOT_TOKEN`):
-        * **`SUPABASE_URL`**: Your project URL from Supabase Project Settings -> API.
-        * **`SUPABASE_KEY`**: Your `anon` (public) `key` from Supabase Project Settings -> API.
-        * **`SUPABASE_DB_URL`**: Your PostgreSQL connection string from Supabase Database -> Connection String (for Python).
-        * **`TELEGRAM_BOT_TOKEN`**: Your Telegram Bot Token.
-4.  **Ensure `bse_company_list_cleaned.csv` is present:** This file is still needed for fuzzy search suggestions and should be in your repository.
-5.  **Commit and Push:** Commit all these changes to your Git repository and push them. Render.com will automatically rebuild and redeploy your service.
-
-After deployment, your Flask app will now use Supabase for all persistent data storage! You can verify this by adding scrips and chat IDs, then manually restarting your Render service. The data should rema
