@@ -23,7 +23,9 @@ MAX_RETRIES_MAIN_LOOP = 3 # Max retries for the main scheduling loop
 DAYS_TO_FETCH = 2 # Set to 2 to include today and the previous 2 full days (total 3 days)
 
 # Telegram settings
-TELEGRAM_BOT_TOKEN = '7527888676:AAEul4nktWJT2Bt7vciEsC9ukHfV1bTx-ck'
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN') # Get token from environment variable
+if not TELEGRAM_BOT_TOKEN:
+    print("CRITICAL ERROR: TELEGRAM_BOT_TOKEN environment variable not set. Telegram alerts will not work.")
 TELEGRAM_TIMEOUT = 15 # Increased timeout for Telegram requests (from 10 to 15 seconds)
 TELEGRAM_MAX_RETRIES = 5 # Max retries for sending a single Telegram message
 TELEGRAM_RETRY_DELAY_BASE = 5 # Base delay in seconds for exponential backoff
@@ -795,4 +797,5 @@ if __name__ == '__main__':
     # Render.com provides the port via an environment variable
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
 
