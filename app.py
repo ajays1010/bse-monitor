@@ -734,33 +734,38 @@ def index():
                 else: # Should not be reached due to earlier check, but good for safety
                     return jsonify({"message": "Invalid scrip action."}), 400
 
-        elif item_type == 'chat_id':
-            chat_id = data.get('chat_id')
-            if action == 'add':
-                if not chat_id: # Added check for missing chat_id for addition
-                    return jsonify({"message": "Chat ID is required."}), 400
-                success, msg = add_chat_id_to_db(chat_id) # Use DB add
-                if success:
-                    return jsonify({"message": msg}), 200
-                else:
-                    status_code = 409 if "duplicate key" in msg else 500
-                    return jsonify({"message": msg}), status_code
+            elif item_type == 'chat_id':
+                chat_id = data.get('chat_id')
+                if action == 'add':
+                    if not chat_id: # Added check for missing chat_id for addition
+                        return jsonify({"message": "Chat ID is required."}), 400
+                    success, msg = add_chat_id_to_db(chat_id) # Use DB add
+                    if success:
+                        return jsonify({"message": msg}), 200
+                    else:
+                        status_code = 409 if "duplicate key" in msg else 500
+                        return jsonify({"message": msg}), status_code
             
-            elif action == 'remove':
-                if not chat_id: # Added check for missing chat_id for removal
-                    return jsonify({"message": "Chat ID is required for removal."}), 400
-                if chat_id not in current_config_data["telegram_chat_ids"]:
-                    return jsonify({"message": f"Chat ID {chat_id} not found."}), 404
-                
-                current_config_data["telegram_chat_ids"].remove(chat_id)
-                save_config(current_config_data)
-                return jsonify({"message": f"Chat ID {chat_id} removed successfully."}), 200
+                elif action == 'remove': # Corrected indentation for this elif
+                    if not chat_id: # Added check for missing chat_id for removal
+                        return jsonify({"message": "Chat ID is required for removal."}), 400
+                    success, msg = remove_chat_id_from_db(chat_id) # Use DB remove
+                    if success:
+                        return jsonify({"message": msg}), 200
+                    else:
+                        status_code = 404 if "not found" in msg else 500
+                        return jsonify({"message": msg}), status_code
             
-            else:
-                return jsonify({"message": "Invalid chat ID action."}), 400
-        
-        else:
-            return jsonify({"message": "Invalid item type. Use 'scrip' or 'chat_id'."}), 400
+                else: # Should not be reached
+                    return jsonify({"message": "Invalid chat ID action."}), 400
+            
+            else: # Should not be reached
+                return jsonify({"message": "Invalid item type. Use 'scrip' or 'chat_id'."}), 400
+
+        except Exception as e:
+            log_message(f"API: Unhandled error in /api/config POST: {e}")
+            # Return a generic 500 error as JSON
+            return jsonify({"message": f"An internal server error occurred: {e}"}), 500
 
     @app.route('/api/suggest_company', methods=['GET'])
     def suggest_company_api():
@@ -883,4 +888,3 @@ def index():
         # Render.com provides the port via an environment variable
         port = int(os.environ.get('PORT', 5000))
         app.run(host='0.0.0.0', port=port)
-
