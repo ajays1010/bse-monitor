@@ -12,19 +12,10 @@ from rapidfuzz import process # Import rapidfuzz for fuzzy matching
 from supabase import create_client, Client # Import Supabase client
 
 # --- Global Configuration ---
-# Base directory for persistent files. This will be the mount point for Render Disk.
-# Use '/var/data' as it's a common and recommended persistent disk mount point on Render.
-# For local testing, you might use 'data' or a specific local path.
-# Render automatically sets the PERSISTENT_DISK_PATH env var if a disk is attached.
-PERSISTENT_DIR = os.environ.get('PERSISTENT_DISK_PATH', 'data') 
-
-# Ensure the persistent directory exists. This is crucial.
-os.makedirs(PERSISTENT_DIR, exist_ok=True)
-
-# File paths for persistent data - these will now be inside the PERSISTENT_DIR
-CONFIG_FILE = os.path.join(PERSISTENT_DIR, 'monitored_scripts_config.json') 
-CACHE_FILE = os.path.join(PERSISTENT_DIR, "seen_announcements.json")
-LOG_FILE = os.path.join(PERSISTENT_DIR, "telegram_log.txt") 
+# Supabase Credentials (fetched from environment variables)
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY") # This is your 'anon' key
+SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL") # This is your full PostgreSQL connection string
 
 # Worker settings
 MAX_RETRIES_MAIN_LOOP = 3 # Max retries for the main scheduling loop
@@ -44,13 +35,25 @@ GLOBAL_TELEGRAM_CHAT_IDS = [] # Stores a list of Telegram chat IDs from Supabase
 GLOBAL_BSE_COMPANY_NAMES = [] # Stores all company names for suggestions (from bse_company_list_cleaned.csv)
 GLOBAL_BSE_DF = pd.DataFrame() # Stores the full BSE company list DataFrame
 
+# Initialize Supabase client
+supabase: Client = None # Will be initialized in main or on first request
+
 app = Flask(__name__)
 
 # --- Core Helper Functions ---
 
 def log_message(message):
-    """Logs messages to console."""
+    """Logs messages to console and an ephemeral log file."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # Note: This LOG_FILE will be ephemeral on Render.com unless a persistent disk is configured.
+    # For true persistence of logs, consider an external logging service.
+    log_file_path = "telegram_log.txt" # Local file for logs
+    try:
+        with open(log_file_path, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] {message}\n")
+    except Exception as e:
+        # Fallback to print if file writing fails (e.g., permissions)
+        print(f"[LOG_ERROR] Could not write to log file: {e}")
     print(f"[LOG] {message}") # Always print to console/Render logs
 
 def get_supabase_client():
@@ -58,7 +61,7 @@ def get_supabase_client():
     global supabase
     if supabase is None:
         if not SUPABASE_URL or not SUPABASE_KEY:
-            log_message("CRITICAL ERROR: Supabase URL or Key not set. Database operations will follow.")
+            log_message("CRITICAL ERROR: Supabase URL or Key not set. Database operations will fail.")
             return None
         try:
             supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -731,38 +734,33 @@ def index():
                 else: # Should not be reached due to earlier check, but good for safety
                     return jsonify({"message": "Invalid scrip action."}), 400
 
-            elif item_type == 'chat_id':
-                chat_id = data.get('chat_id')
-                if action == 'add':
-                    if not chat_id: # Added check for missing chat_id for addition
-                        return jsonify({"message": "Chat ID is required."}), 400
-                    success, msg = add_chat_id_to_db(chat_id) # Use DB add
-                    if success:
-                        return jsonify({"message": msg}), 200
-                    else:
-                        status_code = 409 if "duplicate key" in msg else 500
-                        return jsonify({"message": msg}), status_code
-                
-                elif action == 'remove':
-                    if not chat_id: # Added check for missing chat_id for removal
-                        return jsonify({"message": "Chat ID is required for removal."}), 400
-                    success, msg = remove_chat_id_from_db(chat_id) # Use DB remove
-                    if success:
-                        return jsonify({"message": msg}), 200
-                    else:
-                        status_code = 404 if "not found" in msg else 500
-                        return jsonify({"message": msg}), status_code
-                
-                else: # Should not be reached
-                    return jsonify({"message": "Invalid chat ID action."}), 400
+        elif item_type == 'chat_id':
+            chat_id = data.get('chat_id')
+            if action == 'add':
+                if not chat_id: # Added check for missing chat_id for addition
+                    return jsonify({"message": "Chat ID is required."}), 400
+                success, msg = add_chat_id_to_db(chat_id) # Use DB add
+                if success:
+                    return jsonify({"message": msg}), 200
+                else:
+                    status_code = 409 if "duplicate key" in msg else 500
+                    return jsonify({"message": msg}), status_code
             
-            else: # Should not be reached
-                return jsonify({"message": "Invalid item type."}), 400
-
-        except Exception as e:
-            log_message(f"API: Unhandled error in /api/config POST: {e}")
-            # Return a generic 500 error as JSON
-            return jsonify({"message": f"An internal server error occurred: {e}"}), 500
+            elif action == 'remove':
+                if not chat_id: # Added check for missing chat_id for removal
+                    return jsonify({"message": "Chat ID is required for removal."}), 400
+                if chat_id not in current_config_data["telegram_chat_ids"]:
+                    return jsonify({"message": f"Chat ID {chat_id} not found."}), 404
+                
+                current_config_data["telegram_chat_ids"].remove(chat_id)
+                save_config(current_config_data)
+                return jsonify({"message": f"Chat ID {chat_id} removed successfully."}), 200
+            
+            else:
+                return jsonify({"message": "Invalid chat ID action."}), 400
+        
+        else:
+            return jsonify({"message": "Invalid item type. Use 'scrip' or 'chat_id'."}), 400
 
     @app.route('/api/suggest_company', methods=['GET'])
     def suggest_company_api():
@@ -870,26 +868,7 @@ def index():
         # Initialize Supabase client globally
         get_supabase_client()
 
-        # Ensure log file exists (still useful for general app logs)
-        # Note: If you want these logs to persist, you'd need a Render Disk or external logging service.
-        # For now, it's just printing to Render's ephemeral stdout.
-        # You could also consider sending critical logs to Telegram.
-        # os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True) # Not needed if not writing to file
-        # with open(LOG_FILE, "w", encoding="utf-8") as f:
-        #     f.write(f"--- Application Log started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
-
         log_message("Flask app starting.")
-
-        # Create empty config/cache files if they don't exist on first run
-        # These are no longer used for primary persistence with Supabase,
-        # but the code might still attempt to create them if PERSISTENT_DIR points to a writable path.
-        # For Supabase integration, these lines become less critical for data persistence.
-        # os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True) # Ensure directory for CONFIG_FILE exists
-        # if not os.path.exists(CONFIG_FILE):
-        #     save_config({"scrip_codes": {}, "telegram_chat_ids": []}) # Initialize with empty chat_ids list
-        # os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True) # Ensure directory for CACHE_FILE exists
-        # if not os.path.exists(CACHE_FILE):
-        #     save_seen_ids({})
 
         # Load initial BSE company list for suggestions
         load_bse_company_list()
