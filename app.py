@@ -645,73 +645,148 @@ def index():
         </html>
     """)
 
+# @app.route('/api/config', methods=['GET'])
+# def get_config_api():
+#     API endpoint to get the current configuration (scrip codes and chat IDs)
+#     return jsonify(load_config_from_supabase())
+
 @app.route('/api/config', methods=['GET'])
 def get_config_api():
-    """API endpoint to get the current configuration (scrip codes and chat IDs)."""
-    return jsonify(load_config_from_supabase())
+    """API endpoint to get the current configuration (scrip codes and chat IDs) from Supabase."""
+    sb = get_supabase_client()
+    if sb is None:
+        return jsonify({"status": "error", "message": "Supabase not initialized"}), 500
+
+    try:
+        scrips_res = sb.table("monitored_scrips").select("*").execute()
+        chats_res = sb.table("telegram_recipients").select("*").execute()
+
+        return jsonify({
+            "scrip_codes": {item["bse_code"]: item["company_name"] for item in scrips_res.data},
+            "telegram_chat_ids": [item["chat_id"] for item in chats_res.data]
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# @app.route('/api/config', methods=['POST'])
+# def manage_config_api():
+#     """API endpoint to add or remove scrip codes or Telegram chat IDs."""
+#     data = request.get_json()
+#     action = data.get('action') # 'add' or 'remove'
+#     item_type = data.get('type') # 'scrip' or 'chat_id'
+
+#     current_config_data = load_config_from_supabase() # Always load the latest to avoid race conditions
+
+#     if item_type == 'scrip':
+#         bse_code = data.get('bse_code')
+#         company_name = data.get('company_name')
+#         if action == 'add':
+#             if not bse_code or not company_name:
+#                 return jsonify({"message": "BSE Code and Company Name are required."}), 400
+#             if bse_code in current_config_data["scrip_codes"]:
+#                 return jsonify({"message": f"Scrip code {bse_code} already exists."}), 409
+            
+#             current_config_data["scrip_codes"][bse_code] = company_name
+#             save_config(current_config_data)
+#             return jsonify({"message": f"Scrip code {bse_code} ({company_name}) added successfully."}), 200
+        
+#         elif action == 'remove':
+#             if not bse_code:
+#                 return jsonify({"message": "BSE Code is required for removal."}), 400
+#             if bse_code not in current_config_data["scrip_codes"]:
+#                 return jsonify({"message": f"Scrip code {bse_code} not found."}), 404
+            
+#             del current_config_data["scrip_codes"][bse_code]
+#             save_config(current_config_data)
+#             return jsonify({"message": f"Scrip code {bse_code} removed successfully."}), 200
+        
+#         else:
+#             return jsonify({"message": "Invalid scrip action. Use 'add' or 'remove'."}), 400
+
+#     elif item_type == 'chat_id':
+#         chat_id = data.get('chat_id')
+#         if action == 'add':
+#             if not chat_id:
+#                 return jsonify({"message": "Chat ID is required."}), 400
+#             if chat_id in current_config_data["telegram_chat_ids"]:
+#                 return jsonify({"message": f"Chat ID {chat_id} already exists."}), 409
+            
+#             current_config_data["telegram_chat_ids"].append(chat_id)
+#             save_config(current_config_data)
+#             return jsonify({"message": f"Chat ID {chat_id} added successfully."}), 200
+        
+#         elif action == 'remove':
+#             if not chat_id:
+#                 return jsonify({"message": "Chat ID is required for removal."}), 400
+#             if chat_id not in current_config_data["telegram_chat_ids"]:
+#                 return jsonify({"message": f"Chat ID {chat_id} not found."}), 404
+            
+#             current_config_data["telegram_chat_ids"].remove(chat_id)
+#             save_config(current_config_data)
+#             return jsonify({"message": f"Chat ID {chat_id} removed successfully."}), 200
+        
+#         else:
+#             return jsonify({"message": "Invalid chat ID action. Use 'add' or 'remove'."}), 400
+    
+#     else:
+#         return jsonify({"message": "Invalid item type. Use 'scrip' or 'chat_id'."}), 400
 
 @app.route('/api/config', methods=['POST'])
 def manage_config_api():
-    """API endpoint to add or remove scrip codes or Telegram chat IDs."""
+    """API endpoint to add or remove scrip codes or Telegram chat IDs using Supabase."""
     data = request.get_json()
-    action = data.get('action') # 'add' or 'remove'
-    item_type = data.get('type') # 'scrip' or 'chat_id'
+    action = data.get('action')  # 'add' or 'remove'
+    item_type = data.get('type')  # 'scrip' or 'chat_id'
 
-    current_config_data = load_config_from_supabase() # Always load the latest to avoid race conditions
+    sb = get_supabase_client()
+    if sb is None:
+        return jsonify({"message": "Supabase not initialized."}), 500
 
-    if item_type == 'scrip':
-        bse_code = data.get('bse_code')
-        company_name = data.get('company_name')
-        if action == 'add':
-            if not bse_code or not company_name:
-                return jsonify({"message": "BSE Code and Company Name are required."}), 400
-            if bse_code in current_config_data["scrip_codes"]:
-                return jsonify({"message": f"Scrip code {bse_code} already exists."}), 409
-            
-            current_config_data["scrip_codes"][bse_code] = company_name
-            save_config(current_config_data)
-            return jsonify({"message": f"Scrip code {bse_code} ({company_name}) added successfully."}), 200
-        
-        elif action == 'remove':
-            if not bse_code:
-                return jsonify({"message": "BSE Code is required for removal."}), 400
-            if bse_code not in current_config_data["scrip_codes"]:
-                return jsonify({"message": f"Scrip code {bse_code} not found."}), 404
-            
-            del current_config_data["scrip_codes"][bse_code]
-            save_config(current_config_data)
-            return jsonify({"message": f"Scrip code {bse_code} removed successfully."}), 200
-        
-        else:
-            return jsonify({"message": "Invalid scrip action. Use 'add' or 'remove'."}), 400
+    try:
+        if item_type == 'scrip':
+            bse_code = data.get('bse_code')
+            company_name = data.get('company_name')
 
-    elif item_type == 'chat_id':
-        chat_id = data.get('chat_id')
-        if action == 'add':
-            if not chat_id:
-                return jsonify({"message": "Chat ID is required."}), 400
-            if chat_id in current_config_data["telegram_chat_ids"]:
-                return jsonify({"message": f"Chat ID {chat_id} already exists."}), 409
-            
-            current_config_data["telegram_chat_ids"].append(chat_id)
-            save_config(current_config_data)
-            return jsonify({"message": f"Chat ID {chat_id} added successfully."}), 200
-        
-        elif action == 'remove':
-            if not chat_id:
-                return jsonify({"message": "Chat ID is required for removal."}), 400
-            if chat_id not in current_config_data["telegram_chat_ids"]:
-                return jsonify({"message": f"Chat ID {chat_id} not found."}), 404
-            
-            current_config_data["telegram_chat_ids"].remove(chat_id)
-            save_config(current_config_data)
-            return jsonify({"message": f"Chat ID {chat_id} removed successfully."}), 200
-        
-        else:
-            return jsonify({"message": "Invalid chat ID action. Use 'add' or 'remove'."}), 400
-    
-    else:
+            if action == 'add':
+                if not bse_code or not company_name:
+                    return jsonify({"message": "BSE Code and Company Name are required."}), 400
+
+                sb.table("monitored_scrips").insert({
+                    "bse_code": bse_code,
+                    "company_name": company_name
+                }).execute()
+                return jsonify({"message": f"Scrip code {bse_code} ({company_name}) added to Supabase."}), 200
+
+            elif action == 'remove':
+                if not bse_code:
+                    return jsonify({"message": "BSE Code is required for removal."}), 400
+
+                sb.table("monitored_scrips").delete().eq("bse_code", bse_code).execute()
+                return jsonify({"message": f"Scrip code {bse_code} removed from Supabase."}), 200
+
+        elif item_type == 'chat_id':
+            chat_id = data.get('chat_id')
+
+            if action == 'add':
+                if not chat_id:
+                    return jsonify({"message": "Chat ID is required."}), 400
+
+                sb.table("telegram_recipients").insert({"chat_id": chat_id}).execute()
+                return jsonify({"message": f"Chat ID {chat_id} added to Supabase."}), 200
+
+            elif action == 'remove':
+                if not chat_id:
+                    return jsonify({"message": "Chat ID is required for removal."}), 400
+
+                sb.table("telegram_recipients").delete().eq("chat_id", chat_id).execute()
+                return jsonify({"message": f"Chat ID {chat_id} removed from Supabase."}), 200
+
         return jsonify({"message": "Invalid item type. Use 'scrip' or 'chat_id'."}), 400
+
+    except Exception as e:
+        return jsonify({"message": f"Supabase error: {e}"}), 500
+
 
 @app.route('/api/suggest_company', methods=['GET'])
 def suggest_company_api():
@@ -840,3 +915,4 @@ if __name__ == '__main__':
     # Render.com provides the port via an environment variable
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
