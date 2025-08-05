@@ -67,7 +67,7 @@ def load_config_from_db():
     except Exception as e:
         log_message(f"❌ Failed to load config from Supabase: {e}")
 
-
+log_message("🔥 monitor loop entered")
 def check_for_new_announcements_task():
     log_message("🔥 Worker loop running...")
     while True:
@@ -81,7 +81,7 @@ def check_for_new_announcements_task():
                 for chat_id in GLOBAL_TELEGRAM_CHAT_IDS:
                     send_telegram_message(chat_id, alert_message)
                 time.sleep(2)
-
+log_message("🔥 monitor loop entered")
             time.sleep(300)
         except Exception as e:
             log_message(f"❌ Error in worker loop: {e}")
@@ -121,3 +121,4 @@ if __name__ == "__main__":
     worker_thread.start()
     log_message("🧵 Background worker thread started.")
     app.run(host="0.0.0.0", port=port)
+
