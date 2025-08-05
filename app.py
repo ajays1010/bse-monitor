@@ -13,9 +13,9 @@ from supabase import create_client, Client # Import Supabase client
 
 # --- Global Configuration ---
 # Supabase Credentials (fetched from environment variables)
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY") # This is your 'anon' key
-SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL") # This is your full PostgreSQL connection string
+SUPABASE_URL = os.environ.get("https://vvoeipguhywbkkklkszd.supabase.co")
+SUPABASE_KEY = os.environ.get("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2b2VpcGd1aHl3Ymtra2xrc3pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzODA5OTQsImV4cCI6MjA2OTk1Njk5NH0.nvgJvuKy5DotyDqkhUcjSRAHXnlBBa4hHcudaHJuTaQ") # This is your 'anon' key
+SUPABASE_DB_URL = os.environ.get("postgresql://postgres:1V@dodara@db.vvoeipguhywbkkklkszd.supabase.co:5432/postgres") # This is your full PostgreSQL connection string
 
 # Worker settings
 MAX_RETRIES_MAIN_LOOP = 3 # Max retries for the main scheduling loop
@@ -871,3 +871,4 @@ def index():
         # Render.com provides the port via an environment variable
         port = int(os.environ.get('PORT', 5000))
         app.run(host='0.0.0.0', port=port)
+
