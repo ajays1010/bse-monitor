@@ -12,10 +12,19 @@ from rapidfuzz import process # Import rapidfuzz for fuzzy matching
 from supabase import create_client, Client # Import Supabase client
 
 # --- Global Configuration ---
-# Supabase Credentials (fetched from environment variables)
-SUPABASE_URL = os.environ.get("https://vvoeipguhywbkkklkszd.supabase.co")
-SUPABASE_KEY = os.environ.get("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2b2VpcGd1aHl3Ymtra2xrc3pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzODA5OTQsImV4cCI6MjA2OTk1Njk5NH0.nvgJvuKy5DotyDqkhUcjSRAHXnlBBa4hHcudaHJuTaQ") # This is your 'anon' key
-SUPABASE_DB_URL = os.environ.get("postgresql://postgres:1V@dodara@db.vvoeipguhywbkkklkszd.supabase.co:5432/postgres") # This is your full PostgreSQL connection string
+# Base directory for persistent files. This will be the mount point for Render Disk.
+# Use '/var/data' as it's a common and recommended persistent disk mount point on Render.
+# For local testing, you might use 'data' or a specific local path.
+# Render automatically sets the PERSISTENT_DISK_PATH env var if a disk is attached.
+PERSISTENT_DIR = os.environ.get('PERSISTENT_DISK_PATH', 'data') 
+
+# Ensure the persistent directory exists. This is crucial.
+os.makedirs(PERSISTENT_DIR, exist_ok=True)
+
+# File paths for persistent data - these will now be inside the PERSISTENT_DIR
+CONFIG_FILE = os.path.join(PERSISTENT_DIR, 'monitored_scripts_config.json') 
+CACHE_FILE = os.path.join(PERSISTENT_DIR, "seen_announcements.json")
+LOG_FILE = os.path.join(PERSISTENT_DIR, "telegram_log.txt") 
 
 # Worker settings
 MAX_RETRIES_MAIN_LOOP = 3 # Max retries for the main scheduling loop
@@ -34,9 +43,6 @@ GLOBAL_MONITORED_SCRIPS = {} # Stores scrip_code: company_name from Supabase
 GLOBAL_TELEGRAM_CHAT_IDS = [] # Stores a list of Telegram chat IDs from Supabase
 GLOBAL_BSE_COMPANY_NAMES = [] # Stores all company names for suggestions (from bse_company_list_cleaned.csv)
 GLOBAL_BSE_DF = pd.DataFrame() # Stores the full BSE company list DataFrame
-
-# Initialize Supabase client
-supabase: Client = None # Will be initialized in main or on first request
 
 app = Flask(__name__)
 
@@ -62,7 +68,7 @@ def get_supabase_client():
             supabase = None
     return supabase
 
-def send_telegram_message(chat_id, message):
+def send_telegram_message(chat_id, message): # Modified to accept chat_id
     """Sends a message to a specific Telegram chat ID with retry logic and logs it."""
     if not TELEGRAM_BOT_TOKEN:
         log_message("Telegram bot token is not set. Cannot send message.")
@@ -686,55 +692,77 @@ def index():
     @app.route('/api/config', methods=['POST'])
     def manage_config_api():
         """API endpoint to add or remove scrip codes or Telegram chat IDs."""
-        data = request.get_json()
-        action = data.get('action') # 'add' or 'remove'
-        item_type = data.get('type') # 'scrip' or 'chat_id'
+        try: # Added try-except around the entire function
+            if not request.is_json:
+                log_message("API: /api/config POST received non-JSON content-type.")
+                return jsonify({"message": "Request must be JSON"}), 400
+            
+            data = request.get_json()
 
-        if item_type == 'scrip':
-            bse_code = data.get('bse_code')
-            company_name = data.get('company_name')
-            if action == 'add':
-                success, msg = save_scrip_to_db(bse_code, company_name) # Use DB save
-                if success:
-                    return jsonify({"message": msg}), 200
-                else:
-                    status_code = 409 if "duplicate key" in msg else 500
-                    return jsonify({"message": msg}), status_code
-            
-            elif action == 'remove':
-                success, msg = remove_scrip_from_db(bse_code) # Use DB remove
-                if success:
-                    return jsonify({"message": msg}), 200
-                else:
-                    status_code = 404 if "not found" in msg else 500
-                    return jsonify({"message": msg}), status_code
-            
-            else:
-                return jsonify({"message": "Invalid scrip action. Use 'add' or 'remove'."}), 400
+            action = data.get('action') # 'add' or 'remove'
+            item_type = data.get('type') # 'scrip' or 'chat_id'
 
-        elif item_type == 'chat_id':
-            chat_id = data.get('chat_id')
-            if action == 'add':
-                success, msg = add_chat_id_to_db(chat_id) # Use DB add
-                if success:
-                    return jsonify({"message": msg}), 200
-                else:
-                    status_code = 409 if "duplicate key" in msg else 500
-                    return jsonify({"message": msg}), status_code
+            if action not in ['add', 'remove']:
+                return jsonify({"message": "Invalid action. Use 'add' or 'remove'."}), 400
+            if item_type not in ['scrip', 'chat_id']:
+                return jsonify({"message": "Invalid item type. Use 'scrip' or 'chat_id'."}), 400
+
+            if item_type == 'scrip':
+                bse_code = data.get('bse_code')
+                company_name = data.get('company_name')
+                if action == 'add':
+                    success, msg = save_scrip_to_db(bse_code, company_name) # Use DB save
+                    if success:
+                        return jsonify({"message": msg}), 200
+                    else:
+                        status_code = 409 if "duplicate key" in msg else 500
+                        return jsonify({"message": msg}), status_code
+                
+                elif action == 'remove':
+                    if not bse_code: # Added check for missing bse_code for removal
+                        return jsonify({"message": "BSE Code is required for removal."}), 400
+                    success, msg = remove_scrip_from_db(bse_code) # Use DB remove
+                    if success:
+                        return jsonify({"message": msg}), 200
+                    else:
+                        status_code = 404 if "not found" in msg else 500
+                        return jsonify({"message": msg}), status_code
+                
+                else: # Should not be reached due to earlier check, but good for safety
+                    return jsonify({"message": "Invalid scrip action."}), 400
+
+            elif item_type == 'chat_id':
+                chat_id = data.get('chat_id')
+                if action == 'add':
+                    if not chat_id: # Added check for missing chat_id for addition
+                        return jsonify({"message": "Chat ID is required."}), 400
+                    success, msg = add_chat_id_to_db(chat_id) # Use DB add
+                    if success:
+                        return jsonify({"message": msg}), 200
+                    else:
+                        status_code = 409 if "duplicate key" in msg else 500
+                        return jsonify({"message": msg}), status_code
+                
+                elif action == 'remove':
+                    if not chat_id: # Added check for missing chat_id for removal
+                        return jsonify({"message": "Chat ID is required for removal."}), 400
+                    success, msg = remove_chat_id_from_db(chat_id) # Use DB remove
+                    if success:
+                        return jsonify({"message": msg}), 200
+                    else:
+                        status_code = 404 if "not found" in msg else 500
+                        return jsonify({"message": msg}), status_code
+                
+                else: # Should not be reached
+                    return jsonify({"message": "Invalid chat ID action."}), 400
             
-            elif action == 'remove':
-                success, msg = remove_chat_id_from_db(chat_id) # Use DB remove
-                if success:
-                    return jsonify({"message": msg}), 200
-                else:
-                    status_code = 404 if "not found" in msg else 500
-                    return jsonify({"message": msg}), status_code
-            
-            else:
-                return jsonify({"message": "Invalid chat ID action. Use 'add' or 'remove'."}), 400
-        
-        else:
-            return jsonify({"message": "Invalid item type. Use 'scrip' or 'chat_id'."}), 400
+            else: # Should not be reached
+                return jsonify({"message": "Invalid item type."}), 400
+
+        except Exception as e:
+            log_message(f"API: Unhandled error in /api/config POST: {e}")
+            # Return a generic 500 error as JSON
+            return jsonify({"message": f"An internal server error occurred: {e}"}), 500
 
     @app.route('/api/suggest_company', methods=['GET'])
     def suggest_company_api():
@@ -853,10 +881,15 @@ def index():
         log_message("Flask app starting.")
 
         # Create empty config/cache files if they don't exist on first run
-        if not os.path.exists(CONFIG_FILE):
-            save_config({"scrip_codes": {}})
-        if not os.path.exists(CACHE_FILE):
-            save_seen_ids({})
+        # These are no longer used for primary persistence with Supabase,
+        # but the code might still attempt to create them if PERSISTENT_DIR points to a writable path.
+        # For Supabase integration, these lines become less critical for data persistence.
+        # os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True) # Ensure directory for CONFIG_FILE exists
+        # if not os.path.exists(CONFIG_FILE):
+        #     save_config({"scrip_codes": {}, "telegram_chat_ids": []}) # Initialize with empty chat_ids list
+        # os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True) # Ensure directory for CACHE_FILE exists
+        # if not os.path.exists(CACHE_FILE):
+        #     save_seen_ids({})
 
         # Load initial BSE company list for suggestions
         load_bse_company_list()
