@@ -15,6 +15,11 @@ from supabase import create_client, Client # Import Supabase client
 # Supabase Credentials (fetched from environment variables)
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY") # This is your 'anon' key
+try:
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    print("✅ TEST: Supabase connection successful")
+except Exception as e:
+    print(f"❌ TEST: Supabase failed - {e}")
 #SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL") # This is your full PostgreSQL connection string
 
 # Worker settings
@@ -888,4 +893,5 @@ def index():
         # Render.com provides the port via an environment variable
         port = int(os.environ.get('PORT', 5000))
         app.run(host='0.0.0.0', port=port)
+
 
