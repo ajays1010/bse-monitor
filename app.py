@@ -86,10 +86,12 @@ def check_bse_announcements():
                 sb.table("seen_announcements").insert({"news_id": news_id}).execute()
 
                 # Send alert
-                msg = f"📢 *{company_name}* ({bse_code})
-📝 {title}
-📅 {date_str}
-📎 {pdf_link}"
+                msg = (
+    f"📢 *{company_name}* ({bse_code})\\n"
+    f"📝 {title}\\n"
+    f"📅 {date_str}\\n"
+    f"📎 {pdf_link}"
+)
                 send_telegram_alert(msg)
 
     except Exception as e:
@@ -159,3 +161,4 @@ if __name__ == "__main__":
     threading.Thread(target=background_worker, daemon=True).start()
     print("[LOG] 🚀 Flask app starting.")
     app.run(host="0.0.0.0", port=10000)
+
