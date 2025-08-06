@@ -113,6 +113,10 @@ def background_worker():
 def ping():
     return "pong", 200
 
+@app.route("/")
+def home():
+    return "✅ BSE Monitor is running with Supabase + Telegram integration.", 200
+
 # Config APIs
 @app.route("/api/config", methods=["GET"])
 def get_config_api():
@@ -161,4 +165,5 @@ if __name__ == "__main__":
     threading.Thread(target=background_worker, daemon=True).start()
     print("[LOG] 🚀 Flask app starting.")
     app.run(host="0.0.0.0", port=10000)
+
 
