@@ -731,88 +731,72 @@ def suggest_company_api():
     
     suggestions = get_suggestions_from_list(query, limit=10) # Get up to 10 suggestions
     return jsonify(suggestions)
-
-@app.route('/announcements', methods=['GET'])
+  @app.route('/announcements', methods=['GET'])
 def view_announcements():
     """
     Displays announcements for a selected scrip code in an HTML table.
     Allows selection of scrip code via a dropdown.
     """
-    selected_scrip_code = request.args.get('scrip_code')
+    # 1️⃣ Get the query param
+    selected_scrip_code = request.args.get('scrip_code', "").strip()
+    app.logger.info(f"/announcements called with scrip_code={selected_scrip_code!r}")
+
+    # 2️⃣ Reload config from Supabase
+    cfg = load_config_from_supabase()
+    app.logger.info(f"/announcements config loaded: {cfg}")
+
+    # 3️⃣ Build dropdown options
+    scrip_options_html = ""
+    for code, name in cfg['scrip_codes'].items():
+        is_sel = "selected" if code == selected_scrip_code else ""
+        scrip_options_html += (
+            f"<option value='{code}' {is_sel}>{name} ({code})</option>"
+        )
+
+    # 4️⃣ If a code is selected, fetch its announcements
     announcements_to_display = []
     company_name_for_display = "Select a Company"
-
-    # Ensure GLOBAL_MONITORED_SCRIPS is up-to-date for the dropdown
-    app.logger.info("DEBUG: /announcements called")
-    current_config_for_ui = load_config_from_supabase()
-    app.logger.info(f"DEBUG: /announcements config={current_config_for_ui}")
-    GLOBAL_MONITORED_SCRIPS.update(current_config_for_ui.get("scrip_codes", {}))
-
     if selected_scrip_code:
-        company_name_for_display = GLOBAL_MONITORED_SCRIPS.get(selected_scrip_code, f"Unknown ({selected_scrip_code})")
-        announcements_to_display = get_bse_announcements(selected_scrip_code, num_announcements=20) # Fetch up to 20 recent
-        app.logger.info(f"Web UI: Fetched {len(announcements_to_display)} announcements for {company_name_for_display}.")
-    
-    # Generate options for the dropdown
-    scrip_options_html = ""
-    for code, name in GLOBAL_MONITORED_SCRIPS.items():
-        selected = "selected" if code == selected_scrip_code else ""
-        scrip_options_html += f"<option value='{code}' {selected}>{name} ({code})</option>"
+        company_name_for_display = cfg['scrip_codes'].get(
+            selected_scrip_code, f"Unknown ({selected_scrip_code})"
+        )
+        app.logger.info(f"/announcements fetching for {selected_scrip_code}")
+        announcements_to_display = get_bse_announcements(
+            selected_scrip_code, num_announcements=20
+        )
+        app.logger.info(
+            f"/announcements found {len(announcements_to_display)} announcements"
+        )
 
+    # 5️⃣ Render
     return render_template_string(f"""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>View Announcements</title>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-            <style>
-                body {{ font-family: 'Inter', sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; color: #333; }}
-                .container {{ max-width: 900px; margin: 20px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
-                h1, h2 {{ color: #10486b; text-align: center; margin-bottom: 25px; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }}
-                h2 {{ margin-top: 30px; }}
-                .back-link {{ display: block; text-align: center; margin-bottom: 20px; color: #007bff; text-decoration: none; font-weight: bold; }}
-                .back-link:hover {{ text-decoration: underline; }}
-                .select-scrip-form {{ display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #f9f9f9; }}
-                select, button {{ padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 1em; }}
-                button {{ background-color: #007bff; color: white; cursor: pointer; border: none; font-weight: bold; transition: background-color 0.3s ease; }}
-                button:hover {{ background-color: #0056b3; }}
-                .announcement-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-                .announcement-table th, .announcement-table td {{ border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }}
-                .announcement-table th {{ background-color: #e9ecef; color: #10486b; }}
-                .announcement-table tr:nth-child(even) {{ background-color: #f9f9f9; }}
-                .announcement-table a {{ color: #007bff; text-decoration: none; }}
-                .announcement-table a:hover {{ text-decoration: underline; }}
-                .no-announcements {{ text-align: center; padding: 20px; color: #666; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <a href="{url_for('index')}" class="back-link">&larr; Back to Admin Home</a>
-                <h1>Announcements for {company_name_for_display}</h1>
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>… your existing head …</head>
+      <body>
+        <h1>Announcements for {company_name_for_display}</h1>
+        <form method="GET" action="/announcements">
+          <select name="scrip_code" onchange="this.form.submit()">
+            <option value="">-- Select a Company --</option>
+            {scrip_options_html}
+          </select>
+        </form>
 
-                <form class="select-scrip-form" action="{url_for('view_announcements')}" method="GET">
-                    <label for="scrip_select">Select Company:</label>
-                    <select id="scrip_select" name="scrip_code" onchange="this.form.submit()">
-                        <option value="">-- Select a Company --</option>
-                        {scrip_options_html}
-                    </select>
-                </form>
-
-                {"<table class='announcement-table'><thead><tr><th>Date & Time</th><th>Title</th><th>PDF Link</th><th>XBRL Link</th></tr></thead><tbody>" if announcements_to_display else ""}
-                {"".join([
-                    f"<tr><td>{ann.get('Date')}</td><td>{ann.get('Title')}</td><td><a href='{ann.get('PDF Link')}' target='_blank'>View PDF</a></td><td><a href='{ann.get('XBRL Link')}' target='_blank'>View XBRL</a></td></tr>"
-                    for ann in announcements_to_display
-                ]) if announcements_to_display else ""}
-                {"</tbody></table>" if announcements_to_display else ""}
-
-                {"<p class='no-announcements'>No announcements found for selected company or in the last 90 days.</p>" if not announcements_to_display and selected_scrip_code else ""}
-                {"<p class='no-announcements'>Please select a company from the dropdown to view its announcements.</p>" if not selected_scrip_code else ""}
-            </div>
-        </body>
-        </html>
+        {"<table><tr><th>Date</th><th>Title</th><th>PDF</th></tr>" if announcements_to_display else ""}
+        {"".join([
+            f"<tr>"
+            f"<td>{ann['Date']}</td>"
+            f"<td>{ann['Title']}</td>"
+            f"<td><a href='{ann['PDF Link']}' target='_blank'>PDF</a></td>"
+            f"</tr>"
+            for ann in announcements_to_display
+        ]) if announcements_to_display else ""}
+        {"</table>" if announcements_to_display else ""}
+        {"" if announcements_to_display else "<p>No announcements found.</p>"}
+      </body>
+    </html>
     """)
+
 
 @app.route('/health')
 def health_check():
@@ -851,5 +835,6 @@ if __name__ == '__main__':
     # Render.com provides the port via an environment variable
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
