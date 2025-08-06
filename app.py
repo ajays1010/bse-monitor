@@ -745,7 +745,7 @@ def view_announcements():
     # Ensure GLOBAL_MONITORED_SCRIPS is up-to-date for the dropdown
     app.logger.info("DEBUG: /announcements called")
     current_config_for_ui = load_config_from_supabase()
-    app.logger.info(f"DEBUG: /announcements config={cfg}")
+    app.logger.info(f"DEBUG: /announcements config={current_config_for_ui}")
     GLOBAL_MONITORED_SCRIPS.update(current_config_for_ui.get("scrip_codes", {}))
 
     if selected_scrip_code:
@@ -851,4 +851,5 @@ if __name__ == '__main__':
     # Render.com provides the port via an environment variable
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
 
