@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import schedule
 import random # For exponential backoff jitter
 import pandas as pd
+import logging
 
 from supabase import create_client, Client
 
@@ -20,6 +21,11 @@ CONFIG_FILE = 'monitored_scripts_config.json'
 CACHE_FILE = "seen_announcements.json"
 # File to log all activity
 LOG_FILE = "telegram_log.txt" 
+#Set all logs to stdout
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
 
 # Worker settings
 MAX_RETRIES_MAIN_LOOP = 3 # Max retries for the main scheduling loop
@@ -46,12 +52,12 @@ app = Flask(__name__)
 
 # --- Core Helper Functions (consolidated from previous scripts) ---
 
-def log_message(message):
-    """Logs messages to a local file with a timestamp."""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"[{timestamp}] {message}\n")
-    print(f"[LOG] {message}") # Also print to console for testing
+# def app.logger.info(message):
+#     """Logs messages to a local file with a timestamp."""
+#     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+#     with open(LOG_FILE, "a", encoding="utf-8") as f:
+#         f.write(f"[{timestamp}] {message}\n")
+#     print(f"[LOG] {message}") # Also print to console for testing
 
 def send_telegram_message(chat_id, message): # Modified to accept chat_id
     """Sends a message to a specific Telegram chat ID with retry logic and logs it."""
@@ -62,21 +68,21 @@ def send_telegram_message(chat_id, message): # Modified to accept chat_id
         try:
             response = requests.post(url, data=payload, timeout=TELEGRAM_TIMEOUT)
             response.raise_for_status() # Raises HTTPError for bad responses (4xx or 5xx)
-            log_message(f"Telegram message sent successfully to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {message}")
+            app.logger.info(f"Telegram message sent successfully to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {message}")
             return True # Message sent successfully
         except requests.exceptions.Timeout as e:
             delay = (TELEGRAM_RETRY_DELAY_BASE * (2 ** attempt)) + random.uniform(0, 1) # Exponential backoff with jitter
-            log_message(f"Telegram send timeout to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. Retrying in {delay:.2f} seconds.")
+            app.logger.info(f"Telegram send timeout to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. Retrying in {delay:.2f} seconds.")
             time.sleep(delay)
         except requests.exceptions.RequestException as e:
             delay = (TELEGRAM_RETRY_DELAY_BASE * (2 ** attempt)) + random.uniform(0, 1)
-            log_message(f"Telegram request error to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. Retrying in {delay:.2f} seconds.")
+            app.logger.info(f"Telegram request error to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. Retrying in {delay:.2f} seconds.")
             time.sleep(delay)
         except Exception as e:
-            log_message(f"Unexpected error sending Telegram message to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. No further retries for this attempt.")
+            app.logger.info(f"Unexpected error sending Telegram message to {chat_id} (Attempt {attempt + 1}/{TELEGRAM_MAX_RETRIES}): {e}. No further retries for this attempt.")
             break # Break on unexpected errors not related to requests
 
-    log_message(f"Failed to send Telegram message to {chat_id} after {TELEGRAM_MAX_RETRIES} attempts: {message}")
+    app.logger.info(f"Failed to send Telegram message to {chat_id} after {TELEGRAM_MAX_RETRIES} attempts: {message}")
     return False # Message failed after all retries
 
 
@@ -84,57 +90,51 @@ def get_supabase_client():
     global supabase
     if supabase is None:
         if not SUPABASE_URL or not SUPABASE_KEY:
-            log_message("❌ Supabase URL or Key missing.")
+            app.logger.info("❌ Supabase URL or Key missing.")
             return None
         try:
             supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-            log_message("✅ Supabase client initialized.")
+            app.logger.info("✅ Supabase client initialized.")
         except Exception as e:
-            log_message(f"❌ Supabase client error: {e}")
+            app.logger.info(f"❌ Supabase client error: {e}")
             supabase = None
     return supabase
 
 
 def load_config_from_supabase():
+    """Fetches monitored_scrips & telegram_recipients from Supabase and returns as dict."""
     sb = get_supabase_client()
     if sb is None:
-        return
+        app.logger.info("❌ load_config: Supabase client is not initialized.")
+        return {"scrip_codes": {}, "telegram_chat_ids": []}
 
     try:
-        response_scrips = sb.table("monitored_scrips").select("*").execute()
-        response_chats = sb.table("telegram_recipients").select("*").execute()
+        scrips_res = sb.table("monitored_scrips").select("bse_code,company_name").execute()
+        chats_res = sb.table("telegram_recipients").select("chat_id").execute()
 
-        scrips = {item["bse_code"]: item["company_name"] for item in response_scrips.data}
-        chats = [item["chat_id"] for item in response_chats.data]
+        scrips = {item["bse_code"]: item["company_name"] for item in scrips_res.data}
+        chats = [item["chat_id"] for item in chats_res.data]
 
+        # update globals for background worker
         global GLOBAL_MONITORED_SCRIPS, GLOBAL_TELEGRAM_CHAT_IDS
         GLOBAL_MONITORED_SCRIPS = scrips
         GLOBAL_TELEGRAM_CHAT_IDS = chats
 
-        log_message(f"✅ Loaded {len(scrips)} scrips and {len(chats)} chat IDs from Supabase.")
+        app.logger.info(f"✅ load_config: Loaded {len(scrips)} scrips and {len(chats)} chat IDs from Supabase.")
+        return {"scrip_codes": scrips, "telegram_chat_ids": chats}
+
     except Exception as e:
-        log_message(f"❌ Failed to load config from Supabase: {e}")
-
-
-def load_config_from_supabase():
-    """Loads scrip codes and chat IDs from the JSON config file."""
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r') as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            log_message(f"Warning: Could not decode JSON from {CONFIG_FILE}. Returning empty config.")
-            return {"scrip_codes": {}, "telegram_chat_ids": []} # Ensure default includes chat_ids
-    return {"scrip_codes": {}, "telegram_chat_ids": []} # Default empty structure if file doesn't exist
+        app.logger.info(f"❌ load_config: Supabase query failed: {e}")
+        return {"scrip_codes": {}, "telegram_chat_ids": []}
 
 def save_config(config_data):
     """Saves scrip codes and chat IDs to the JSON config file."""
     try:
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config_data, f, indent=4)
-        log_message(f"Config saved to {CONFIG_FILE}.")
+        app.logger.info(f"Config saved to {CONFIG_FILE}.")
     except Exception as e:
-        log_message(f"Error saving config to {CONFIG_FILE}: {e}")
+        app.logger.info(f"Error saving config to {CONFIG_FILE}: {e}")
 
 def load_seen_ids():
     """Loads previously seen announcement IDs from a JSON cache file."""
@@ -143,7 +143,7 @@ def load_seen_ids():
             with open(CACHE_FILE, "r") as f:
                 return json.load(f)
         except json.JSONDecodeError:
-            log_message(f"Warning: Could not decode JSON from {CACHE_FILE}. Starting with empty cache.")
+            app.logger.info(f"Warning: Could not decode JSON from {CACHE_FILE}. Starting with empty cache.")
             return {}
     return {}
 
@@ -152,16 +152,16 @@ def save_seen_ids(data):
     try:
         with open(CACHE_FILE, "w") as f:
             json.dump(data, f)
-        log_message(f"Seen IDs saved to {CACHE_FILE}.")
+        app.logger.info(f"Seen IDs saved to {CACHE_FILE}.")
     except Exception as e:
-        log_message(f"Error saving seen IDs to {CACHE_FILE}: {e}")
+        app.logger.info(f"Error saving seen IDs to {CACHE_FILE}: {e}")
 
 def get_bse_announcements(scrip_code, num_announcements=15):
     """
     Fetches recent announcements for a given scrip code from the BSE API.
     """
     if not scrip_code.isdigit():
-        log_message(f"Input Error: Scrip code '{scrip_code}' must be a numeric string. Skipping.")
+        app.logger.info(f"Input Error: Scrip code '{scrip_code}' must be a numeric string. Skipping.")
         return []
 
     try:
@@ -216,10 +216,10 @@ def get_bse_announcements(scrip_code, num_announcements=15):
         return announcements_list
 
     except requests.exceptions.RequestException as e:
-        log_message(f"Request Error in get_bse_announcements for {scrip_code}: {e}")
+        app.logger.info(f"Request Error in get_bse_announcements for {scrip_code}: {e}")
         return []
     except Exception as e:
-        log_message(f"An unexpected error occurred in get_bse_announcements for {scrip_code}:\n{e}")
+        app.logger.info(f"An unexpected error occurred in get_bse_announcements for {scrip_code}:\n{e}")
         return []
 
 def get_suggestions_from_list(query, limit=5): # Renamed to avoid conflict with Flask route
@@ -251,13 +251,13 @@ def load_bse_company_list():
         if os.path.exists(bse_company_list_file):
             GLOBAL_BSE_DF = pd.read_csv(bse_company_list_file)
             GLOBAL_BSE_COMPANY_NAMES = GLOBAL_BSE_DF["Company Name"].tolist()
-            log_message(f"Loaded {len(GLOBAL_BSE_COMPANY_NAMES)} companies for suggestions.")
+            app.logger.info(f"Loaded {len(GLOBAL_BSE_COMPANY_NAMES)} companies for suggestions.")
         else:
-            log_message(f"Warning: {bse_company_list_file} not found. Company name suggestions will not work.")
+            app.logger.info(f"Warning: {bse_company_list_file} not found. Company name suggestions will not work.")
             GLOBAL_BSE_DF = pd.DataFrame(columns=["BSE Code", "Company Name"])
             GLOBAL_BSE_COMPANY_NAMES = []
     except Exception as e:
-        log_message(f"Error loading {bse_company_list_file}: {e}")
+        app.logger.info(f"Error loading {bse_company_list_file}: {e}")
         GLOBAL_BSE_DF = pd.DataFrame(columns=["BSE Code", "Company Name"])
         GLOBAL_BSE_COMPANY_NAMES = []
 
@@ -266,13 +266,14 @@ def load_bse_company_list():
 def reload_monitored_scrip_codes_from_config_file():
     """Task to periodically reload the monitored scrip codes and chat IDs from the local JSON config."""
     global GLOBAL_MONITORED_SCRIPS, GLOBAL_TELEGRAM_CHAT_IDS
+    app.logger.info("DEBUG: reload task triggered")
     new_config = load_config_from_supabase()
     if new_config:
         GLOBAL_MONITORED_SCRIPS = new_config.get("scrip_codes", {})
         GLOBAL_TELEGRAM_CHAT_IDS = new_config.get("telegram_chat_ids", [])
-        log_message(f"Successfully reloaded {len(GLOBAL_MONITORED_SCRIPS)} scrip codes and {len(GLOBAL_TELEGRAM_CHAT_IDS)} chat IDs from local config.")
+        app.logger.info(f"Successfully reloaded {len(GLOBAL_MONITORED_SCRIPS)} scrip codes and {len(GLOBAL_TELEGRAM_CHAT_IDS)} chat IDs from local config.")
     else:
-        log_message("Warning: Failed to reload config. Keeping previous lists.")
+        app.logger.info("Warning: Failed to reload config. Keeping previous lists.")
 
 def check_for_new_announcements_task():
     """
@@ -283,20 +284,20 @@ def check_for_new_announcements_task():
     
     current_time = datetime.now()
     cutoff_date = current_time - timedelta(days=DAYS_TO_FETCH)
-    log_message(f"Worker: Checking for new announcements since {cutoff_date.strftime('%Y-%m-%d %H:%M:%S')}")
+    app.logger.info(f"Worker: Checking for new announcements since {cutoff_date.strftime('%Y-%m-%d %H:%M:%S')}")
 
     new_announcements_found_this_cycle = False
 
     if not GLOBAL_MONITORED_SCRIPS:
-        log_message("Worker: No scrip codes loaded. Skipping announcement check in this cycle.")
+        app.logger.info("Worker: No scrip codes loaded. Skipping announcement check in this cycle.")
         return
 
     for scrip_code, company_name in GLOBAL_MONITORED_SCRIPS.items():
-        log_message(f"Worker: Processing {company_name} (Scrip Code: {scrip_code})...")
+        app.logger.info(f"Worker: Processing {company_name} (Scrip Code: {scrip_code})...")
         anns = get_bse_announcements(scrip_code, num_announcements=50) 
 
         if not anns:
-            log_message(f"Worker: No announcements fetched for scrip code {scrip_code}.")
+            app.logger.info(f"Worker: No announcements fetched for scrip code {scrip_code}.")
             continue
 
         if scrip_code not in seen:
@@ -314,7 +315,7 @@ def check_for_new_announcements_task():
                     date_only_str = ann_full_date_str.split('T')[0].split(' ')[0]
                     ann_date = datetime.strptime(date_only_str, '%Y-%m-%d')
                 except ValueError:
-                    log_message(f"Worker: Warning: Failed to parse date '{ann_full_date_str}' for announcement. Skipping date filter for this item.")
+                    app.logger.info(f"Worker: Warning: Failed to parse date '{ann_full_date_str}' for announcement. Skipping date filter for this item.")
                     ann_date = None
 
             if ann_date:
@@ -324,10 +325,10 @@ def check_for_new_announcements_task():
                     if news_id not in seen.get(scrip_code, {}): # Use .get() to safely check nested dict
                         seen.setdefault(scrip_code, {})[news_id] = True # Set default and mark as seen
                         new_items_for_scrip.append(ann)
-                        log_message(f"Worker: Found new announcement for {scrip_code} ({company_name}): {ann['Title']}")
+                        app.logger.info(f"Worker: Found new announcement for {scrip_code} ({company_name}): {ann['Title']}")
                         new_announcements_found_this_cycle = True
             else:
-                log_message(f"Worker: Announcement for {scrip_code} has unparsable date format '{ann_full_date_str}'. Skipping this announcement.")
+                app.logger.info(f"Worker: Announcement for {scrip_code} has unparsable date format '{ann_full_date_str}'. Skipping this announcement.")
 
         # Send messages to all configured Telegram chat IDs
         if new_items_for_scrip and GLOBAL_TELEGRAM_CHAT_IDS:
@@ -336,19 +337,19 @@ def check_for_new_announcements_task():
                     msg_text = f"📢 {ann['Title']}\n🕒 {ann['Date']}\n🔗 {ann['PDF Link']}"
                     send_telegram_message(chat_id, msg_text) # Pass chat_id here
         elif new_items_for_scrip and not GLOBAL_TELEGRAM_CHAT_IDS:
-            log_message("Worker: New announcements found, but no Telegram chat IDs configured.")
+            app.logger.info("Worker: New announcements found, but no Telegram chat IDs configured.")
 
     save_seen_ids(seen)
     if not new_announcements_found_this_cycle:
-        log_message("Worker: No new announcements found in this cycle.")
-    log_message(f"Worker: Monitoring cycle completed.")
+        app.logger.info("Worker: No new announcements found in this cycle.")
+    app.logger.info(f"Worker: Monitoring cycle completed.")
 
 def start_background_worker():
     """
     Initializes and starts the BSE monitoring worker's scheduling loop.
     This function runs in a separate thread.
     """
-    log_message("Background worker thread started.")
+    app.logger.info("Background worker thread started.")
 
     # Initial load of scrip codes and chat IDs for the worker
     reload_monitored_scrip_codes_from_config_file()
@@ -369,12 +370,12 @@ def start_background_worker():
             time.sleep(1) # Sleep for 1 second to avoid high CPU usage
             retries = 0 # Reset retries on successful loop iteration
         except Exception as e:
-            log_message(f"Background Worker: Error in scheduling loop: {e}")
+            app.logger.info(f"Background Worker: Error in scheduling loop: {e}")
             retries += 1
             if retries >= MAX_RETRIES_MAIN_LOOP:
-                log_message(f"Background Worker: Max retries ({MAX_RETRIES_MAIN_LOOP}) reached. Exiting worker thread.")
+                app.logger.info(f"Background Worker: Max retries ({MAX_RETRIES_MAIN_LOOP}) reached. Exiting worker thread.")
                 break
-            log_message(f"Background Worker: Retrying scheduling loop in 60 seconds (retry {retries}/{MAX_RETRIES_MAIN_LOOP}).")
+            app.logger.info(f"Background Worker: Retrying scheduling loop in 60 seconds (retry {retries}/{MAX_RETRIES_MAIN_LOOP}).")
             time.sleep(60)
 
 # --- Flask Routes ---
@@ -645,11 +646,6 @@ def index():
         </html>
     """)
 
-# @app.route('/api/config', methods=['GET'])
-# def get_config_api():
-#     API endpoint to get the current configuration (scrip codes and chat IDs)
-#     return jsonify(load_config_from_supabase())
-
 @app.route('/api/config', methods=['GET'])
 def get_config_api():
     """API endpoint to get the current configuration (scrip codes and chat IDs) from Supabase."""
@@ -660,77 +656,15 @@ def get_config_api():
     try:
         scrips_res = sb.table("monitored_scrips").select("*").execute()
         chats_res = sb.table("telegram_recipients").select("*").execute()
-
+        app.logger.info("SUCCESS: Supabase Tables Loaded")
+        
         return jsonify({
             "scrip_codes": {item["bse_code"]: item["company_name"] for item in scrips_res.data},
             "telegram_chat_ids": [item["chat_id"] for item in chats_res.data]
         })
     except Exception as e:
+        app.logger.info("ERROR: Not able to load Supabase Tables!")
         return jsonify({"status": "error", "message": str(e)}), 500
-
-
-# @app.route('/api/config', methods=['POST'])
-# def manage_config_api():
-#     """API endpoint to add or remove scrip codes or Telegram chat IDs."""
-#     data = request.get_json()
-#     action = data.get('action') # 'add' or 'remove'
-#     item_type = data.get('type') # 'scrip' or 'chat_id'
-
-#     current_config_data = load_config_from_supabase() # Always load the latest to avoid race conditions
-
-#     if item_type == 'scrip':
-#         bse_code = data.get('bse_code')
-#         company_name = data.get('company_name')
-#         if action == 'add':
-#             if not bse_code or not company_name:
-#                 return jsonify({"message": "BSE Code and Company Name are required."}), 400
-#             if bse_code in current_config_data["scrip_codes"]:
-#                 return jsonify({"message": f"Scrip code {bse_code} already exists."}), 409
-            
-#             current_config_data["scrip_codes"][bse_code] = company_name
-#             save_config(current_config_data)
-#             return jsonify({"message": f"Scrip code {bse_code} ({company_name}) added successfully."}), 200
-        
-#         elif action == 'remove':
-#             if not bse_code:
-#                 return jsonify({"message": "BSE Code is required for removal."}), 400
-#             if bse_code not in current_config_data["scrip_codes"]:
-#                 return jsonify({"message": f"Scrip code {bse_code} not found."}), 404
-            
-#             del current_config_data["scrip_codes"][bse_code]
-#             save_config(current_config_data)
-#             return jsonify({"message": f"Scrip code {bse_code} removed successfully."}), 200
-        
-#         else:
-#             return jsonify({"message": "Invalid scrip action. Use 'add' or 'remove'."}), 400
-
-#     elif item_type == 'chat_id':
-#         chat_id = data.get('chat_id')
-#         if action == 'add':
-#             if not chat_id:
-#                 return jsonify({"message": "Chat ID is required."}), 400
-#             if chat_id in current_config_data["telegram_chat_ids"]:
-#                 return jsonify({"message": f"Chat ID {chat_id} already exists."}), 409
-            
-#             current_config_data["telegram_chat_ids"].append(chat_id)
-#             save_config(current_config_data)
-#             return jsonify({"message": f"Chat ID {chat_id} added successfully."}), 200
-        
-#         elif action == 'remove':
-#             if not chat_id:
-#                 return jsonify({"message": "Chat ID is required for removal."}), 400
-#             if chat_id not in current_config_data["telegram_chat_ids"]:
-#                 return jsonify({"message": f"Chat ID {chat_id} not found."}), 404
-            
-#             current_config_data["telegram_chat_ids"].remove(chat_id)
-#             save_config(current_config_data)
-#             return jsonify({"message": f"Chat ID {chat_id} removed successfully."}), 200
-        
-#         else:
-#             return jsonify({"message": "Invalid chat ID action. Use 'add' or 'remove'."}), 400
-    
-#     else:
-#         return jsonify({"message": "Invalid item type. Use 'scrip' or 'chat_id'."}), 400
 
 @app.route('/api/config', methods=['POST'])
 def manage_config_api():
@@ -809,13 +743,15 @@ def view_announcements():
     company_name_for_display = "Select a Company"
 
     # Ensure GLOBAL_MONITORED_SCRIPS is up-to-date for the dropdown
+    app.logger.info("DEBUG: /announcements called")
     current_config_for_ui = load_config_from_supabase()
+    app.logger.info(f"DEBUG: /announcements config={cfg}")
     GLOBAL_MONITORED_SCRIPS.update(current_config_for_ui.get("scrip_codes", {}))
 
     if selected_scrip_code:
         company_name_for_display = GLOBAL_MONITORED_SCRIPS.get(selected_scrip_code, f"Unknown ({selected_scrip_code})")
         announcements_to_display = get_bse_announcements(selected_scrip_code, num_announcements=20) # Fetch up to 20 recent
-        log_message(f"Web UI: Fetched {len(announcements_to_display)} announcements for {company_name_for_display}.")
+        app.logger.info(f"Web UI: Fetched {len(announcements_to_display)} announcements for {company_name_for_display}.")
     
     # Generate options for the dropdown
     scrip_options_html = ""
@@ -894,7 +830,7 @@ if __name__ == '__main__':
         with open(LOG_FILE, "w", encoding="utf-8") as f:
             f.write(f"--- Application Log started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
 
-    log_message("Flask app starting.")
+    app.logger.info("Flask app starting.")
 
     # Create empty config/cache files if they don't exist on first run
     if not os.path.exists(CONFIG_FILE):
@@ -908,10 +844,11 @@ if __name__ == '__main__':
     # Start the background worker thread
     if not worker_thread.is_alive():
         worker_thread.start()
-        log_message("Background worker thread initiated.")
+        app.logger.info("Background worker thread initiated.")
     else:
-        log_message("Background worker thread already running.")
+        app.logger.info("Background worker thread already running.")
 
     # Render.com provides the port via an environment variable
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
