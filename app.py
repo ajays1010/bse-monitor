@@ -768,34 +768,76 @@ def view_announcements():
             f"/announcements found {len(announcements_to_display)} announcements"
         )
 
-    # 5️⃣ Render
-    return render_template_string(f"""
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>… your existing head …</head>
-      <body>
-        <h1>Announcements for {company_name_for_display}</h1>
-        <form method="GET" action="/announcements">
-          <select name="scrip_code" onchange="this.form.submit()">
-            <option value="">-- Select a Company --</option>
-            {scrip_options_html}
-          </select>
-        </form>
-
-        {"<table><tr><th>Date</th><th>Title</th><th>PDF</th></tr>" if announcements_to_display else ""}
-        {"".join([
-            f"<tr>"
-            f"<td>{ann['Date']}</td>"
-            f"<td>{ann['Title']}</td>"
-            f"<td><a href='{ann['PDF Link']}' target='_blank'>PDF</a></td>"
-            f"</tr>"
-            for ann in announcements_to_display
-        ]) if announcements_to_display else ""}
-        {"</table>" if announcements_to_display else ""}
-        {"" if announcements_to_display else "<p>No announcements found.</p>"}
-      </body>
-    </html>
-    """)
+    @@ def view_announcements():
+-    # 5️⃣ Render
+-    return render_template_string(f"""
+-    <!DOCTYPE html>
+-    <html lang="en">
+-      <head>… your existing head …</head>
+-      <body>
+-        <h1>Announcements for {company_name_for_display}</h1>
+-        <form method="GET" action="/announcements">
+-          <select name="scrip_code" onchange="this.form.submit()">
+-            <option value="">-- Select a Company --</option>
+-            {scrip_options_html}
+-          </select>
+-        </form>
+-
+-        {"<table><tr><th>Date</th><th>Title</th><th>PDF</th></tr>" if announcements_to_display else ""}
+-        {"".join([
+-            f"<tr>"
+-            f"<td>{ann['Date']}</td>"
+-            f"<td>{ann['Title']}</td>"
+-            f"<td><a href='{ann['PDF Link']}' target='_blank'>PDF</a></td>"
+-            f"</tr>"
+-            for ann in announcements_to_display
+-        ]) if announcements_to_display else ""}
+-        {"</table>" if announcements_to_display else ""}
+-        {"" if announcements_to_display else "<p>No announcements found.</p>"}
+-      </body>
+-    </html>
+-    """)
++    # 5️⃣ Build the announcements table HTML
++    if announcements_to_display:
++        rows = ""
++        for ann in announcements_to_display:
++            rows += (
++                "<tr>"
++                f"<td>{ann['Date']}</td>"
++                f"<td>{ann['Title']}</td>"
++                f"<td><a href='{ann['PDF Link']}' target='_blank'>PDF</a></td>"
++                "</tr>"
++            )
++        table_html = (
++            "<table>"
++            "<tr><th>Date</th><th>Title</th><th>PDF</th></tr>"
++            f"{rows}"
++            "</table>"
++        )
++    else:
++        table_html = "<p>No announcements found.</p>"
++
++    # 6️⃣ Render the final page
++    return render_template_string(f"""
++    <!DOCTYPE html>
++    <html lang="en">
++      <head>
++        <meta charset="UTF-8">
++        <title>Announcements</title>
++      </head>
++      <body>
++        <h1>Announcements for {company_name_for_display}</h1>
++        <form method="GET" action="/announcements">
++          <select name="scrip_code" onchange="this.form.submit()">
++            <option value="">-- Select a Company --</option>
++            {scrip_options_html}
++          </select>
++        </form>
++
++        {table_html}
++      </body>
++    </html>
++    """)
 
 
 @app.route('/health')
@@ -835,6 +877,7 @@ if __name__ == '__main__':
     # Render.com provides the port via an environment variable
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
 
