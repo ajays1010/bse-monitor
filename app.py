@@ -1,101 +1,84 @@
 # app.py
-import os
-import threading
-import time
-import requests
-import schedule
+import os, threading, time, requests, schedule
 from datetime import datetime, timedelta
-from flask import Flask, jsonify
+from flask import Flask, request, jsonify, render_template_string, url_for
 from supabase import create_client
+
 from fetcher import get_bse_announcements  # your existing fetcher
 
-# ─── Configuration ──────────────────────────────────────────────────────────────
+# ─── Config ───────────────────────────────────────────────────────────────────
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-if not all([SUPABASE_URL, SUPABASE_KEY, TELEGRAM_BOT_TOKEN]):
-    raise RuntimeError("Set SUPABASE_URL, SUPABASE_KEY & TELEGRAM_BOT_TOKEN env vars")
 
 # Worker settings
-DAYS_TO_FETCH = 2     # today + past 2 days
-INTERVAL_MINUTES = 5  # run every 5 minutes
+DAYS_TO_FETCH     = 2
+INTERVAL_MINUTES  = 5
 
-# ─── Initialize ────────────────────────────────────────────────────────────────
+# Initialize
 app = Flask(__name__)
 sb  = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def log(msg):
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{ts}] {msg}", flush=True)
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
 
-# ─── Supabase helpers ───────────────────────────────────────────────────────────
+# ─── Supabase Helpers ──────────────────────────────────────────────────────────
 def load_config():
-    """Returns ({code:company}, [chat_id,…])."""
-    # monitored_scrips
+    """Return (scrips: dict, chats: list)."""
     r1 = sb.table("monitored_scrips").select("bse_code,company_name").execute()
     scrips = {row["bse_code"]: row["company_name"] for row in (r1.data or [])}
-    # telegram_recipients
     r2 = sb.table("telegram_recipients").select("chat_id").execute()
-    chats = [row["chat_id"] for row in (r2.data or [])]
-    log(f"Loaded {len(scrips)} scripts, {len(chats)} chat IDs")
+    chats  = [row["chat_id"] for row in (r2.data or [])]
     return scrips, chats
 
 def load_seen_ids(code):
-    """Returns set of news_id already sent for this scrip."""
-    res = sb.table("seen_announcements") \
-            .select("news_id") \
-            .eq("scrip_code", code) \
-            .execute()
-    return {row["news_id"] for row in (res.data or [])}
+    r = sb.table("seen_announcements").select("news_id") \
+           .eq("scrip_code", code).execute()
+    return {row["news_id"] for row in (r.data or [])}
 
-def mark_seen_id(code, news_id):
-    """Inserts (code,news_id), ignores duplicates."""
+def mark_seen(code, news_id):
     try:
-        sb.table("seen_announcements") \
-          .insert({"scrip_code": code, "news_id": news_id}) \
-          .execute()
-    except Exception as e:
-        # duplicate key, etc
-        log(f"❗ Could not mark seen ({code},{news_id}): {e}")
+        sb.table("seen_announcements").insert({
+            "scrip_code": code, "news_id": news_id
+        }).execute()
+    except Exception:
+        pass
 
 # ─── Telegram ──────────────────────────────────────────────────────────────────
 def send_telegram(chat_id, text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    resp = requests.post(url, data={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}, timeout=10)
+    resp = requests.post(url, data={
+        "chat_id": chat_id, "text": text, "parse_mode": "HTML"
+    }, timeout=10)
     resp.raise_for_status()
 
-# ─── Worker task ────────────────────────────────────────────────────────────────
+# ─── Background Worker ─────────────────────────────────────────────────────────
 def check_announcements():
-    log("🔄 Worker cycle start")
+    log("Worker cycle start")
     scrips, chats = load_config()
     cutoff = datetime.now() - timedelta(days=DAYS_TO_FETCH)
+
+    log(f"Monitoring {len(scrips)} scrip(s), {len(chats)} chat(s)")
     for code, name in scrips.items():
-        log(f"→ {code} ({name}): fetching announcements…")
-        try:
-            anns = get_bse_announcements(code, num_announcements=50)
-        except Exception as e:
-            log(f"⚠️ Fetch error for {code}: {e}")
-            continue
+        log(f"=> Fetching {code} ({name})")
+        anns = get_bse_announcements(code, num_announcements=50)
 
         seen = load_seen_ids(code)
-        newly = []
+        new_items = []
         for ann in anns:
             # parse date
             try:
                 dt = datetime.fromisoformat(ann["Date"])
             except Exception:
-                # fallback: assume "YYYY-MM-DD ..." prefix
                 dt = datetime.strptime(ann["Date"].split(" ")[0], "%Y-%m-%d")
-            if dt < cutoff:  
+            if dt < cutoff:
                 continue
-            # identify
-            news_id = ann["XBRL Link"].split("Bsenewid=")[-1].split("&")[0]
-            if news_id in seen:
-                continue
-            newly.append((news_id, ann))
+            nid = ann["XBRL Link"].split("Bsenewid=")[-1].split("&")[0]
+            if nid not in seen:
+                new_items.append((nid, ann))
 
-        log(f"  ↳ {len(newly)} new announcements")
-        for nid, ann in newly:
+        log(f"  ↳ {len(new_items)} new announcements")
+        for nid, ann in new_items:
             msg = (
                 f"📢 <b>{name}</b> ({code})\n"
                 f"🕒 {ann['Date']}\n"
@@ -104,29 +87,150 @@ def check_announcements():
             for chat in chats:
                 try:
                     send_telegram(chat, msg)
-                    log(f"    ✔️ Sent to {chat}: {ann['Title']}")
+                    log(f"    ✓ Sent to {chat}")
                 except Exception as e:
-                    log(f"    ❌ Telegram error for {chat}: {e}")
-            mark_seen_id(code, nid)
+                    log(f"    ✗ Telegram error to {chat}: {e}")
+            mark_seen(code, nid)
 
-    log("✅ Worker cycle complete")
+    log("Worker cycle complete")
 
 def start_worker():
-    # run once immediately
     check_announcements()
     schedule.every(INTERVAL_MINUTES).minutes.do(check_announcements)
     while True:
         schedule.run_pending()
         time.sleep(1)
 
-# ─── Ping endpoint (for UptimeRobot) ────────────────────────────────────────────
-@app.route("/ping")
+# ─── Flask Admin & UI Routes ──────────────────────────────────────────────────
+
+# 1) Admin Panel (/) — manage scrips & chat IDs
+@app.route('/', methods=['GET'])
+def index():
+    scrips, chats = load_config()
+    return render_template_string("""
+<!doctype html>
+<html>
+<head><title>BSE Monitor Admin</title></head>
+<body>
+  <h1>Admin Panel</h1>
+  <h2>Monitored Scrips</h2>
+  <ul>
+    {% for code, name in scrips.items() %}
+      <li>{{code}}: {{name}} 
+        <form style="display:inline" method="POST" action="/remove_scrip">
+          <input type="hidden" name="code" value="{{code}}">
+          <button>Delete</button>
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+  <form method="POST" action="/add_scrip">
+    <input name="bse_code" placeholder="BSE code">
+    <input name="company_name" placeholder="Company">
+    <button>Add</button>
+  </form>
+
+  <h2>Telegram Recipients</h2>
+  <ul>
+    {% for chat in chats %}
+      <li>{{chat}}
+        <form style="display:inline" method="POST" action="/remove_chat">
+          <input type="hidden" name="chat_id" value="{{chat}}">
+          <button>Delete</button>
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+  <form method="POST" action="/add_chat">
+    <input name="chat_id" placeholder="Chat ID">
+    <button>Add</button>
+  </form>
+
+  <p><a href="{{url_for('view_announcements')}}">View Announcements</a></p>
+</body>
+</html>
+    """, scrips=scrips, chats=chats)
+
+@app.route('/add_scrip', methods=['POST'])
+def add_scrip():
+    code = request.form['bse_code'].strip()
+    name = request.form['company_name'].strip()
+    sb.table("monitored_scrips").insert({"bse_code": code, "company_name": name}).execute()
+    return ('', 302, {'Location': '/'})
+
+@app.route('/remove_scrip', methods=['POST'])
+def remove_scrip():
+    code = request.form['code']
+    sb.table("monitored_scrips").delete().eq("bse_code", code).execute()
+    return ('', 302, {'Location': '/'})
+
+@app.route('/add_chat', methods=['POST'])
+def add_chat():
+    cid = request.form['chat_id'].strip()
+    sb.table("telegram_recipients").insert({"chat_id": cid}).execute()
+    return ('', 302, {'Location': '/'})
+
+@app.route('/remove_chat', methods=['POST'])
+def remove_chat():
+    cid = request.form['chat_id']
+    sb.table("telegram_recipients").delete().eq("chat_id", cid).execute()
+    return ('', 302, {'Location': '/'})
+
+# 2) Announcement Viewer
+@app.route('/announcements', methods=['GET'])
+def view_announcements():
+    scrips, _ = load_config()
+    selected = request.args.get('scrip_code','').strip()
+    announcements = []
+    if selected:
+        announcements = get_bse_announcements(selected, num_announcements=20)
+
+    return render_template_string("""
+<!doctype html>
+<html>
+<head><title>View Announcements</title></head>
+<body>
+  <h1>Announcements</h1>
+  <form method="GET">
+    <select name="scrip_code" onchange="this.form.submit()">
+      <option value="">-- Select Company --</option>
+      {% for c,n in scrips.items() %}
+        <option value="{{c}}" {{'selected' if c==selected else ''}}>
+          {{n}} ({{c}})
+        </option>
+      {% endfor %}
+    </select>
+  </form>
+
+  {% if announcements %}
+    <table border=1 cellpadding=5>
+      <tr><th>Date</th><th>Title</th><th>PDF</th></tr>
+      {% for ann in announcements %}
+        <tr>
+          <td>{{ann['Date']}}</td>
+          <td>{{ann['Title']}}</td>
+          <td><a href="{{ann['PDF Link']}}" target="_blank">PDF</a></td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No announcements</p>
+  {% endif %}
+</body>
+</html>
+    """, scrips=scrips, selected=selected, announcements=announcements)
+
+# 3) Ping (for UptimeRobot)
+@app.route('/ping', methods=['GET'])
 def ping():
     return "pong", 200
 
-# ─── Entrypoint ─────────────────────────────────────────────────────────────────
+# ─── Startup ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
+    # start background worker
     t = threading.Thread(target=start_worker, daemon=True)
     t.start()
-    # Flask app on arbitrary port—Render will route it but we won't use it for HTTP
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+
+    # run Flask
+    port = int(os.getenv("PORT", 8000))
+    app.run(host="0.0.0.0", port=port)
