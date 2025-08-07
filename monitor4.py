@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 # ── hard-coded config ────────────────────────────────────
 TELEGRAM_BOT_TOKEN = '7527888676:AAEul4nktWJT2Bt7vciEsC9ukHfV1bTx-ck'
-TELEGRAM_CHAT_ID = '453652457'
+TELEGRAM_CHAT_IDS = '453652457'
 SCRIPT_CODES       = ["500325", "526861"]
 LOOKBACK_DAYS      = 2
 # ─────────────────────────────────────────────────────────
