@@ -171,18 +171,22 @@ def check_and_send():
     log("✅ cycle done")
 
 def worker():
+    log("🔄 worker loop starting")
     check_and_send()
     schedule.every(5).minutes.do(check_and_send)
     while True:
         schedule.run_pending()
         time.sleep(1)
 
-threading.Thread(target=worker,daemon=True).start()
-log("🧵 background worker started")
-
 # ─── Launch ───────────────────────────────────────────────────────────────────
+import threading
+# launch the background loop immediately (for both python and gunicorn)
+t = threading.Thread(target=worker, daemon=True)
+t.start()
+log("🧵 Background worker thread started")
 
 if __name__=="__main__":
     port=int(os.getenv("PORT",5000))
     app.run("0.0.0.0",port)
+
 
