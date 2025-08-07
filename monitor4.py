@@ -7,11 +7,11 @@ import schedule # Re-introduced for scheduling
 from fetcher import get_bse_announcements # Assuming fetcher.py is in the same directory
 
 # --- Configuration ---
-SCRIP_CODES = ['533104', '530669']  # Example: Reliance, Tata Motors
+SCRIP_CODES = ['533104', '532540']  # Example: Reliance, Tata Motors
 CACHE_FILE = "seen_announcements.json"
 LOG_FILE = "telegram_log.txt" # File to log Telegram messages
 MAX_RETRIES = 3
-DAYS_TO_FETCH = 1 # Set to 2 to include today and the previous 2 full days (total 3 days)
+DAYS_TO_FETCH = 2 # Set to 2 to include today and the previous 2 full days (total 3 days)
 
 # Telegram settings
 TELEGRAM_BOT_TOKEN = '7527888676:AAEul4nktWJT2Bt7vciEsC9ukHfV1bTx-ck'
@@ -113,8 +113,7 @@ def check_for_new_announcements_task():
                         new_items_for_scrip.append(ann)
                         log_message(f"Found new announcement for {code}: {ann['Title']}")
                         new_announcements_found_this_cycle = True
-                else:
-                    log_message(f"Announcement for {code} on {ann_date.strftime('%Y-%m-%d')} is older than {DAYS_TO_FETCH} days. Skipping.")
+                # Removed the else block that logged skipped older announcements
             else:
                 log_message(f"Announcement for {code} has unparsable date format '{ann_full_date_str}'. Skipping this announcement.")
 
@@ -170,4 +169,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
