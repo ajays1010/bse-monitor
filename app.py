@@ -54,30 +54,46 @@ def send_telegram(chat_id, text):
 
 # ─── Background Worker ─────────────────────────────────────────────────────────
 def check_announcements():
-    log("Worker cycle start")
+    log("🔄 Worker cycle start")
     scrips, chats = load_config()
     cutoff = datetime.now() - timedelta(days=DAYS_TO_FETCH)
+    log(f"Using cutoff = {cutoff.isoformat()}")
 
-    log(f"Monitoring {len(scrips)} scrip(s), {len(chats)} chat(s)")
     for code, name in scrips.items():
-        log(f"=> Fetching {code} ({name})")
-        anns = get_bse_announcements(code, num_announcements=50)
+        log(f"→ [{code}] {name}: fetching up to 50 announcements…")
+        try:
+            anns = get_bse_announcements(code, num_announcements=50)
+            log(f"   fetched {len(anns)} total announcements")
+        except Exception as e:
+            log(f"   ❌ fetch error: {e}")
+            continue
 
         seen = load_seen_ids(code)
         new_items = []
-        for ann in anns:
-            # parse date
-            try:
-                dt = datetime.fromisoformat(ann["Date"])
-            except Exception:
-                dt = datetime.strptime(ann["Date"].split(" ")[0], "%Y-%m-%d")
-            if dt < cutoff:
-                continue
-            nid = ann["XBRL Link"].split("Bsenewid=")[-1].split("&")[0]
-            if nid not in seen:
-                new_items.append((nid, ann))
 
-        log(f"  ↳ {len(new_items)} new announcements")
+        for ann in anns:
+            raw_dt = ann["Date"]
+            # log the raw date string
+            log(f"     » announcement date raw: {raw_dt}")
+            try:
+                dt = datetime.fromisoformat(raw_dt)
+            except Exception:
+                dt = datetime.strptime(raw_dt.split(" ")[0], "%Y-%m-%d")
+            log(f"       parsed as {dt.isoformat()}")
+            if dt < cutoff:
+                log("       ↳ too old, skipping")
+                continue
+
+            nid = ann["XBRL Link"].split("Bsenewid=")[-1].split("&")[0]
+            if nid in seen:
+                log("       ↳ already seen, skipping")
+                continue
+
+            log("       ↳ NEW announcement!")
+            new_items.append((nid, ann))
+
+        log(f"   ↳ {len(new_items)} new announcement(s) found for {code}")
+
         for nid, ann in new_items:
             msg = (
                 f"📢 <b>{name}</b> ({code})\n"
@@ -87,12 +103,12 @@ def check_announcements():
             for chat in chats:
                 try:
                     send_telegram(chat, msg)
-                    log(f"    ✓ Sent to {chat}")
+                    log(f"       ✓ sent to {chat}")
                 except Exception as e:
-                    log(f"    ✗ Telegram error to {chat}: {e}")
+                    log(f"       ❌ telegram error to {chat}: {e}")
             mark_seen(code, nid)
 
-    log("Worker cycle complete")
+    log("✅ Worker cycle complete\n")
 
 def start_worker():
     check_announcements()
@@ -234,3 +250,4 @@ if __name__ == "__main__":
     # run Flask
     port = int(os.getenv("PORT", 8000))
     app.run(host="0.0.0.0", port=port)
+
