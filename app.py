@@ -4,6 +4,7 @@ import pandas as pd
 from rapidfuzz import process
 from flask import Flask, request, jsonify, render_template_string
 from supabase import create_client
+from fetcher import get_bse_announcements as fetcher_get_announcements
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Supabase
@@ -184,3 +185,4 @@ log("🧵 background worker started")
 if __name__=="__main__":
     port=int(os.getenv("PORT",5000))
     app.run("0.0.0.0",port)
+
