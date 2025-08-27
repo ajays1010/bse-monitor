@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI PDF Analysis Results</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .analysis-section {
+            margin-bottom: 24px;
+            padding: 20px;
+            background: #f8fafc;
+            border-left: 4px solid #3b82f6;
+            border-radius: 8px;
+        }
+        .recommendation {
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .recommendation:contains("BUY") { background-color: #dcfce7; color: #166534; }
+        .recommendation:contains("SELL") { background-color: #fee2e2; color: #991b1b; }
+        .recommendation:contains("HOLD") { background-color: #fef3c7; color: #92400e; }
+        .analysis-metadata {
+            margin-top: 24px;
+            padding: 12px;
+            background: #f1f5f9;
+            border-radius: 6px;
+            color: #64748b;
+        }
+        .ai-analysis-results h3 {
+            color: #1e40af;
+            margin-bottom: 12px;
+        }
+        .print-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        @media print {
+            body { background: white; }
+            .no-print { display: none !important; }
+            .print-section { box-shadow: none; border: 1px solid #e5e7eb; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto p-4 md:p-8">
+        <!-- Header -->
+        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-6 no-print">
+            <h1 class="text-3xl font-bold text-gray-800">🤖 AI PDF Analysis Results</h1>
+            <div class="flex gap-3">
+                <button onclick="window.print()" class="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">
+                    🖨️ Print
+                </button>
+                <button onclick="downloadAnalysis()" class="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600">
+                    💾 Download
+                </button>
+                <a href="/" class="bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600">
+                    ← Back to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Analysis Content -->
+        {% if analysis %}
+        <div class="print-section">
+            <!-- Document Information -->
+            <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h2 class="text-xl font-semibold text-blue-800 mb-2">📄 Document Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <span class="font-medium">Filename:</span> {{ analysis.filename }}
+                    </div>
+                    {% if analysis.scrip_code %}
+                    <div>
+                        <span class="font-medium">BSE Scrip Code:</span> {{ analysis.scrip_code }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- AI Analysis Results -->
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">🧠 AI Analysis</h2>
+                
+                {% if analysis.formatted %}
+                    {{ analysis.formatted | safe }}
+                {% elif analysis.analysis %}
+                    {% if analysis.analysis.company_name %}
+                    <div class="analysis-section">
+                        <h3>🏢 Company Information</h3>
+                        <p><strong>Company:</strong> {{ analysis.analysis.company_name }}</p>
+                        {% if analysis.analysis.scrip_code %}
+                        <p><strong>Scrip Code:</strong> {{ analysis.analysis.scrip_code }}</p>
+                        {% endif %}
+                        {% if analysis.analysis.document_type %}
+                        <p><strong>Document Type:</strong> {{ analysis.analysis.document_type }}</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if analysis.analysis.key_financials %}
+                    <div class="analysis-section">
+                        <h3>💰 Financial Summary</h3>
+                        {% for key, value in analysis.analysis.key_financials.items() %}
+                            {% if value and value != 'N/A' %}
+                            <p><strong>{{ key.title() }}:</strong> {{ value }}</p>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    {% if analysis.analysis.investment_recommendation or analysis.analysis.price_target or analysis.analysis.sentiment_analysis %}
+                    <div class="analysis-section">
+                        <h3>📈 Investment Analysis</h3>
+                        {% if analysis.analysis.investment_recommendation %}
+                        <p><strong>Recommendation:</strong> <span class="recommendation">{{ analysis.analysis.investment_recommendation }}</span></p>
+                        {% endif %}
+                        {% if analysis.analysis.price_target %}
+                        <p><strong>Price Target:</strong> {{ analysis.analysis.price_target }}</p>
+                        {% endif %}
+                        {% if analysis.analysis.sentiment_analysis %}
+                        <p><strong>Sentiment:</strong> {{ analysis.analysis.sentiment_analysis }}</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if analysis.analysis.public_perception or analysis.analysis.catalyst_impact or analysis.analysis.price_momentum %}
+                    <div class="analysis-section">
+                        <h3>🎯 Market Impact</h3>
+                        {% if analysis.analysis.public_perception %}
+                        <p><strong>Public Perception:</strong> {{ analysis.analysis.public_perception }}</p>
+                        {% endif %}
+                        {% if analysis.analysis.catalyst_impact %}
+                        <p><strong>Catalyst Impact:</strong> {{ analysis.analysis.catalyst_impact }}</p>
+                        {% endif %}
+                        {% if analysis.analysis.price_momentum %}
+                        <p><strong>Price Momentum:</strong> {{ analysis.analysis.price_momentum }}</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if analysis.analysis.tldr %}
+                    <div class="analysis-section">
+                        <h3>📝 Summary</h3>
+                        <p>{{ analysis.analysis.tldr }}</p>
+                    </div>
+                    {% endif %}
+
+                    {% if analysis.analysis.analysis_text %}
+                    <div class="analysis-section">
+                        <h3>📄 Full Analysis</h3>
+                        <div class="whitespace-pre-wrap">{{ analysis.analysis.analysis_text }}</div>
+                    </div>
+                    {% endif %}
+
+                    {% if analysis.analysis.analysis_timestamp or analysis.analysis.model_used %}
+                    <div class="analysis-metadata">
+                        <small>
+                            {% if analysis.analysis.analysis_timestamp %}
+                            Analysis generated on {{ analysis.analysis.analysis_timestamp }}
+                            {% endif %}
+                            {% if analysis.analysis.model_used %}
+                            using {{ analysis.analysis.model_used }}
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% endif %}
+                {% else %}
+                    <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p class="text-yellow-800">No detailed analysis data available.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Additional Actions -->
+            <div class="mt-8 p-4 bg-gray-50 border border-gray-200 rounded-lg no-print">
+                <h3 class="text-lg font-semibold mb-3">📋 Next Steps</h3>
+                <div class="space-y-2 text-sm">
+                    <p>• Review the financial metrics and key insights</p>
+                    <p>• Consider the investment recommendation in context of your portfolio</p>
+                    <p>• Monitor announced developments and their impact</p>
+                    <p>• Set price alerts based on target levels mentioned</p>
+                    <p>• Keep track of upcoming corporate actions or events</p>
+                </div>
+            </div>
+        </div>
+
+        {% else %}
+        <div class="bg-white p-8 rounded-lg shadow-lg text-center">
+            <h2 class="text-xl font-semibold text-gray-600 mb-4">No Analysis Data Found</h2>
+            <p class="text-gray-500 mb-6">It seems the analysis data is missing or has expired.</p>
+            <a href="/dashboard" class="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">
+                Return to Dashboard
+            </a>
+        </div>
+        {% endif %}
+
+        <!-- Footer -->
+        <div class="mt-8 text-center text-sm text-gray-500 no-print">
+            <p>AI-powered financial analysis for informed investment decisions</p>
+            <p>Generated by BSE Monitor • For informational purposes only</p>
+        </div>
+    </div>
+
+    <script>
+        function downloadAnalysis() {
+            // Create a formatted text version for download
+            const content = document.querySelector('.print-section').innerText;
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `{{ analysis.filename if analysis else "analysis" }}_ai_analysis.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        // Enhanced print styling
+        window.addEventListener('beforeprint', function() {
+            document.title = 'AI Analysis - {{ analysis.filename if analysis else "PDF Analysis" }}';
+        });
+
+        // Highlight recommendations based on content
+        document.addEventListener('DOMContentLoaded', function() {
+            const recommendations = document.querySelectorAll('.recommendation');
+            recommendations.forEach(rec => {
+                const text = rec.textContent.toUpperCase();
+                if (text.includes('BUY')) {
+                    rec.style.backgroundColor = '#dcfce7';
+                    rec.style.color = '#166534';
+                } else if (text.includes('SELL')) {
+                    rec.style.backgroundColor = '#fee2e2';
+                    rec.style.color = '#991b1b';
+                } else if (text.includes('HOLD')) {
+                    rec.style.backgroundColor = '#fef3c7';
+                    rec.style.color = '#92400e';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

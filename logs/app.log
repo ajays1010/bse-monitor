@@ -1,0 +1,486 @@
+2025-08-27 12:49:42,568 - root - INFO - ==================================================
+2025-08-27 12:49:42,568 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:49:42,568 - root - INFO - Python: 3.11.9
+2025-08-27 12:49:42,606 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:49:42,623 - root - INFO - Memory: 120.81 MB
+2025-08-27 12:49:42,623 - root - INFO - ==================================================
+2025-08-27 12:49:42,758 - root - INFO - Memory usage: 123.97 MB
+2025-08-27 12:50:02,543 - root - INFO - ==================================================
+2025-08-27 12:50:02,543 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:50:02,543 - root - INFO - Python: 3.11.9
+2025-08-27 12:50:02,609 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:50:02,628 - root - INFO - Memory: 122.17 MB
+2025-08-27 12:50:02,629 - root - INFO - ==================================================
+2025-08-27 12:50:04,728 - root - INFO - ==================================================
+2025-08-27 12:50:04,728 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:50:04,728 - root - INFO - Python: 3.11.9
+2025-08-27 12:50:04,784 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:50:04,803 - root - INFO - Memory: 121.63 MB
+2025-08-27 12:50:04,804 - root - INFO - ==================================================
+2025-08-27 12:50:04,940 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 12:51:06,425 - root - INFO - Memory usage: 124.03 MB
+2025-08-27 12:51:09,542 - root - INFO - ==================================================
+2025-08-27 12:51:09,544 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:51:09,544 - root - INFO - Python: 3.11.9
+2025-08-27 12:51:09,585 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:51:09,601 - root - INFO - Memory: 122.23 MB
+2025-08-27 12:51:09,601 - root - INFO - ==================================================
+2025-08-27 12:51:09,738 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 12:51:21,350 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:51:21,443 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:51:21,534 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 12:52:54,468 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:52:54,547 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:52:54,601 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 12:54:28,024 - root - INFO - ==================================================
+2025-08-27 12:54:28,024 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:54:28,024 - root - INFO - Python: 3.11.9
+2025-08-27 12:54:28,061 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:54:28,084 - root - INFO - Memory: 122.11 MB
+2025-08-27 12:54:28,084 - root - INFO - ==================================================
+2025-08-27 12:54:30,260 - root - INFO - ==================================================
+2025-08-27 12:54:30,276 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:54:30,276 - root - INFO - Python: 3.11.9
+2025-08-27 12:54:30,334 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:54:30,352 - root - INFO - Memory: 121.8 MB
+2025-08-27 12:54:30,353 - root - INFO - ==================================================
+2025-08-27 12:54:30,510 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 12:55:09,837 - root - INFO - Memory usage: 127.96 MB
+2025-08-27 12:55:10,311 - root - INFO - Memory usage: 125.92 MB
+2025-08-27 12:55:12,967 - root - INFO - ==================================================
+2025-08-27 12:55:12,967 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:55:12,967 - root - INFO - Python: 3.11.9
+2025-08-27 12:55:13,009 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:55:13,027 - root - INFO - Memory: 122.0 MB
+2025-08-27 12:55:13,027 - root - INFO - ==================================================
+2025-08-27 12:55:13,603 - root - INFO - Memory usage: 123.83 MB
+2025-08-27 12:55:13,787 - root - INFO - Memory usage: 125.41 MB
+2025-08-27 12:55:23,613 - root - INFO - ==================================================
+2025-08-27 12:55:23,613 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:55:23,613 - root - INFO - Python: 3.11.9
+2025-08-27 12:55:23,666 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:55:23,685 - root - INFO - Memory: 122.41 MB
+2025-08-27 12:55:23,685 - root - INFO - ==================================================
+2025-08-27 12:55:37,339 - root - INFO - ==================================================
+2025-08-27 12:55:37,339 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:55:37,340 - root - INFO - Python: 3.11.9
+2025-08-27 12:55:37,374 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:55:37,390 - root - INFO - Memory: 122.28 MB
+2025-08-27 12:55:37,393 - root - INFO - ==================================================
+2025-08-27 12:55:39,851 - root - INFO - ==================================================
+2025-08-27 12:55:39,852 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:55:39,852 - root - INFO - Python: 3.11.9
+2025-08-27 12:55:39,894 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:55:39,914 - root - INFO - Memory: 122.07 MB
+2025-08-27 12:55:39,915 - root - INFO - ==================================================
+2025-08-27 12:55:40,038 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 12:55:52,292 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:55:52,559 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:55:52,797 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 12:56:07,162 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:56:07,354 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:56:07,597 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 12:56:52,158 - root - INFO - Memory usage: 129.66 MB
+2025-08-27 12:56:56,668 - ai_service - WARNING - Google GenerativeAI not available. Install with: pip install google-generativeai
+2025-08-27 12:56:56,669 - ai_service - WARNING - PyPDF2 not available. Install with: pip install PyPDF2
+2025-08-27 12:56:56,684 - root - INFO - ==================================================
+2025-08-27 12:56:56,684 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:56:56,685 - root - INFO - Python: 3.11.9
+2025-08-27 12:56:56,734 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:56:56,754 - root - INFO - Memory: 122.32 MB
+2025-08-27 12:56:56,755 - root - INFO - ==================================================
+2025-08-27 12:56:56,895 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 12:57:04,100 - root - INFO - Memory usage: 124.95 MB
+2025-08-27 12:57:08,333 - ai_service - WARNING - Google GenerativeAI not available. Install with: pip install google-generativeai
+2025-08-27 12:57:08,335 - ai_service - WARNING - PyPDF2 not available. Install with: pip install PyPDF2
+2025-08-27 12:57:08,342 - root - INFO - ==================================================
+2025-08-27 12:57:08,342 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:57:08,343 - root - INFO - Python: 3.11.9
+2025-08-27 12:57:08,377 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:57:08,386 - root - INFO - Memory: 122.09 MB
+2025-08-27 12:57:08,400 - root - INFO - ==================================================
+2025-08-27 12:57:08,568 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 12:57:17,212 - root - INFO - Memory usage: 124.75 MB
+2025-08-27 12:57:17,526 - root - INFO - Memory usage: 125.54 MB
+2025-08-27 12:57:22,884 - ai_service - WARNING - Google GenerativeAI not available. Install with: pip install google-generativeai
+2025-08-27 12:57:22,884 - ai_service - WARNING - PyPDF2 not available. Install with: pip install PyPDF2
+2025-08-27 12:57:22,900 - root - INFO - ==================================================
+2025-08-27 12:57:22,900 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:57:22,901 - root - INFO - Python: 3.11.9
+2025-08-27 12:57:22,939 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:57:22,957 - root - INFO - Memory: 122.09 MB
+2025-08-27 12:57:22,958 - root - INFO - ==================================================
+2025-08-27 12:57:25,019 - ai_service - WARNING - Google GenerativeAI not available. Install with: pip install google-generativeai
+2025-08-27 12:57:25,019 - ai_service - WARNING - PyPDF2 not available. Install with: pip install PyPDF2
+2025-08-27 12:57:25,034 - root - INFO - ==================================================
+2025-08-27 12:57:25,035 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:57:25,035 - root - INFO - Python: 3.11.9
+2025-08-27 12:57:25,076 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:57:25,088 - root - INFO - Memory: 122.29 MB
+2025-08-27 12:57:25,088 - root - INFO - ==================================================
+2025-08-27 12:57:25,192 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 12:57:35,398 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:57:35,518 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:57:35,623 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 12:57:42,042 - ai_service - WARNING - Google GenerativeAI library not available. Skipping AI analysis.
+2025-08-27 12:57:42,213 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:57:42,340 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:57:42,457 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 12:58:03,040 - root - INFO - Memory usage: 129.62 MB
+2025-08-27 12:58:03,322 - root - INFO - Memory usage: 125.34 MB
+2025-08-27 12:58:41,012 - root - INFO - ==================================================
+2025-08-27 12:58:41,026 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:58:41,026 - root - INFO - Python: 3.11.9
+2025-08-27 12:58:41,061 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:58:41,080 - root - INFO - Memory: 147.62 MB
+2025-08-27 12:58:41,081 - root - INFO - ==================================================
+2025-08-27 12:58:43,696 - root - INFO - ==================================================
+2025-08-27 12:58:43,696 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:58:43,696 - root - INFO - Python: 3.11.9
+2025-08-27 12:58:43,736 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:58:43,749 - root - INFO - Memory: 147.66 MB
+2025-08-27 12:58:43,749 - root - INFO - ==================================================
+2025-08-27 12:58:43,864 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 12:58:48,002 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:58:48,080 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:58:48,152 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 12:59:00,667 - ai_service - ERROR - AI analysis failed for d9fe07a4-818c-44ec-9711-421b954cde8d.pdf: 500 An internal error has occurred. Please retry or report in https://developers.generativeai.google/guide/troubleshooting
+2025-08-27 12:59:00,865 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:59:00,999 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 12:59:01,151 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 12:59:04,390 - root - INFO - Memory usage: 162.3 MB
+2025-08-27 12:59:10,706 - root - INFO - ==================================================
+2025-08-27 12:59:10,706 - root - INFO - BSE Monitor Application Starting
+2025-08-27 12:59:10,706 - root - INFO - Python: 3.11.9
+2025-08-27 12:59:10,759 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 12:59:10,776 - root - INFO - Memory: 147.47 MB
+2025-08-27 12:59:10,777 - root - INFO - ==================================================
+2025-08-27 12:59:10,896 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 13:02:32,211 - root - INFO - Memory usage: 152.3 MB
+2025-08-27 13:02:32,679 - root - INFO - Memory usage: 153.03 MB
+2025-08-27 13:09:21,241 - root - INFO - ==================================================
+2025-08-27 13:09:21,242 - root - INFO - BSE Monitor Application Starting
+2025-08-27 13:09:21,242 - root - INFO - Python: 3.11.9
+2025-08-27 13:09:21,288 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 13:09:21,306 - root - INFO - Memory: 147.67 MB
+2025-08-27 13:09:21,306 - root - INFO - ==================================================
+2025-08-27 13:09:24,646 - root - INFO - ==================================================
+2025-08-27 13:09:24,647 - root - INFO - BSE Monitor Application Starting
+2025-08-27 13:09:24,647 - root - INFO - Python: 3.11.9
+2025-08-27 13:09:24,714 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 13:09:24,734 - root - INFO - Memory: 147.36 MB
+2025-08-27 13:09:24,735 - root - INFO - ==================================================
+2025-08-27 13:09:24,878 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 13:10:39,281 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/profiles?select=id&limit=1 "HTTP/1.1 206 Partial Content"
+2025-08-27 13:10:45,149 - root - INFO - Memory usage: 155.66 MB
+2025-08-27 13:10:45,637 - root - INFO - Memory usage: 153.32 MB
+2025-08-27 13:11:32,679 - root - INFO - ==================================================
+2025-08-27 13:11:32,679 - root - INFO - BSE Monitor Application Starting
+2025-08-27 13:11:32,679 - root - INFO - Python: 3.11.9
+2025-08-27 13:11:32,713 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 13:11:32,732 - root - INFO - Memory: 147.54 MB
+2025-08-27 13:11:32,733 - root - INFO - ==================================================
+2025-08-27 13:11:34,993 - root - INFO - ==================================================
+2025-08-27 13:11:34,993 - root - INFO - BSE Monitor Application Starting
+2025-08-27 13:11:34,993 - root - INFO - Python: 3.11.9
+2025-08-27 13:11:35,032 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 13:11:35,039 - root - INFO - Memory: 147.35 MB
+2025-08-27 13:11:35,039 - root - INFO - ==================================================
+2025-08-27 13:11:35,149 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 13:11:58,600 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:11:58,766 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:11:58,898 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:12:24,786 - ai_service - INFO - Successfully analyzed PDF: d9fe07a4-818c-44ec-9711-421b954cde8d.pdf
+2025-08-27 13:12:49,631 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:12:49,762 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:12:49,894 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:13:39,589 - root - INFO - Memory usage: 165.82 MB
+2025-08-27 13:13:45,470 - root - INFO - ==================================================
+2025-08-27 13:13:45,470 - root - INFO - BSE Monitor Application Starting
+2025-08-27 13:13:45,470 - root - INFO - Python: 3.11.9
+2025-08-27 13:13:45,516 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 13:13:45,530 - root - INFO - Memory: 147.44 MB
+2025-08-27 13:13:45,531 - root - INFO - ==================================================
+2025-08-27 13:13:45,708 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 13:14:18,113 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=user_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&chat_id=eq.453652457&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:14:18,272 - httpx - INFO - HTTP Request: POST https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients "HTTP/1.1 409 Conflict"
+2025-08-27 13:14:18,342 - httpx - INFO - HTTP Request: POST https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients "HTTP/1.1 409 Conflict"
+2025-08-27 13:14:18,488 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:14:18,564 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:14:18,691 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:14:55,144 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=user_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&chat_id=eq.453652457&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:14:55,322 - httpx - INFO - HTTP Request: POST https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients "HTTP/1.1 409 Conflict"
+2025-08-27 13:14:55,447 - httpx - INFO - HTTP Request: POST https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients "HTTP/1.1 409 Conflict"
+2025-08-27 13:14:55,599 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:14:55,780 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:14:56,067 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:15:43,728 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/profiles?select=id%2C%20email&google_uid=eq.S3LQw3X9a3UyMZqgnoSdthBRkfG3 "HTTP/1.1 200 OK"
+2025-08-27 13:15:43,848 - httpx - INFO - HTTP Request: PATCH https://sruufdhatrroqfldzyst.supabase.co/rest/v1/profiles?id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 409 Conflict"
+2025-08-27 13:15:51,674 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:15:51,740 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:15:51,822 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:16:38,063 - root - INFO - Memory usage: 157.73 MB
+2025-08-27 13:16:42,572 - root - INFO - ==================================================
+2025-08-27 13:16:42,577 - root - INFO - BSE Monitor Application Starting
+2025-08-27 13:16:42,577 - root - INFO - Python: 3.11.9
+2025-08-27 13:16:42,615 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 13:16:42,624 - root - INFO - Memory: 147.58 MB
+2025-08-27 13:16:42,624 - root - INFO - ==================================================
+2025-08-27 13:16:42,735 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 13:17:12,221 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=user_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&chat_id=eq.453652457&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:17:12,320 - httpx - INFO - HTTP Request: POST https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients "HTTP/1.1 409 Conflict"
+2025-08-27 13:17:12,378 - httpx - INFO - HTTP Request: POST https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients "HTTP/1.1 409 Conflict"
+2025-08-27 13:17:12,444 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:17:12,502 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:17:12,560 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:18:29,425 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/profiles?select=id%2C%20email&google_uid=eq.KvmaMU8c0vYl1myRYJDWXwkKWIg2 "HTTP/1.1 200 OK"
+2025-08-27 13:18:29,867 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.700aef12-889a-491f-928c-21e38bd3d285 "HTTP/1.1 200 OK"
+2025-08-27 13:18:29,999 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.700aef12-889a-491f-928c-21e38bd3d285 "HTTP/1.1 200 OK"
+2025-08-27 13:18:30,118 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.700aef12-889a-491f-928c-21e38bd3d285&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:19:19,735 - httpx - INFO - HTTP Request: POST https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips "HTTP/1.1 201 Created"
+2025-08-27 13:19:19,831 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.700aef12-889a-491f-928c-21e38bd3d285 "HTTP/1.1 200 OK"
+2025-08-27 13:19:19,891 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.700aef12-889a-491f-928c-21e38bd3d285 "HTTP/1.1 200 OK"
+2025-08-27 13:19:19,952 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.700aef12-889a-491f-928c-21e38bd3d285&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:19:21,383 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.700aef12-889a-491f-928c-21e38bd3d285 "HTTP/1.1 200 OK"
+2025-08-27 13:19:21,433 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.700aef12-889a-491f-928c-21e38bd3d285 "HTTP/1.1 200 OK"
+2025-08-27 13:19:32,436 - yfinance - ERROR - Failed to get ticker '539195.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:19:33,331 - yfinance - ERROR - 539195.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:19:33,338 - yfinance - ERROR - Failed to get ticker '539195.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:19:34,164 - yfinance - ERROR - 539195.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:19:34,164 - yfinance - ERROR - Failed to get ticker '539195.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:19:34,905 - yfinance - ERROR - 539195.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:19:34,914 - yfinance - ERROR - Failed to get ticker '539195.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:19:35,727 - yfinance - ERROR - 539195.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:19:41,188 - yfinance - ERROR - Failed to get ticker 'TATAPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:19:42,933 - yfinance - ERROR - TATAPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:19:42,937 - yfinance - ERROR - Failed to get ticker 'TATAPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:19:43,641 - yfinance - ERROR - TATAPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:19:43,644 - yfinance - ERROR - Failed to get ticker 'TATAPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:19:44,580 - yfinance - ERROR - TATAPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:19:44,590 - yfinance - ERROR - Failed to get ticker 'TATAPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:19:45,358 - yfinance - ERROR - TATAPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:19:50,277 - yfinance - ERROR - Failed to get ticker 'FAIRCHEMOR.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:19:51,079 - yfinance - ERROR - FAIRCHEMOR.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:19:51,098 - yfinance - ERROR - Failed to get ticker 'FAIRCHEMOR.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:19:51,897 - yfinance - ERROR - FAIRCHEMOR.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:19:51,898 - yfinance - ERROR - Failed to get ticker 'FAIRCHEMOR.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:19:52,682 - yfinance - ERROR - FAIRCHEMOR.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:19:52,686 - yfinance - ERROR - Failed to get ticker 'FAIRCHEMOR.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:19:53,601 - yfinance - ERROR - FAIRCHEMOR.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:19:58,561 - yfinance - ERROR - Failed to get ticker 'KELLTONTEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:19:59,526 - yfinance - ERROR - KELLTONTEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:19:59,540 - yfinance - ERROR - Failed to get ticker 'KELLTONTEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:00,507 - yfinance - ERROR - KELLTONTEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:00,514 - yfinance - ERROR - Failed to get ticker 'KELLTONTEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:01,322 - yfinance - ERROR - KELLTONTEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:01,325 - yfinance - ERROR - Failed to get ticker 'KELLTONTEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:02,043 - yfinance - ERROR - KELLTONTEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:04,066 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.700aef12-889a-491f-928c-21e38bd3d285 "HTTP/1.1 200 OK"
+2025-08-27 13:20:04,222 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.700aef12-889a-491f-928c-21e38bd3d285 "HTTP/1.1 200 OK"
+2025-08-27 13:20:11,330 - yfinance - ERROR - Failed to get ticker 'ADANIPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:12,207 - yfinance - ERROR - ADANIPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:12,209 - yfinance - ERROR - Failed to get ticker 'ADANIPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:13,153 - yfinance - ERROR - ADANIPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:13,153 - yfinance - ERROR - Failed to get ticker 'ADANIPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:14,266 - yfinance - ERROR - ADANIPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:14,268 - yfinance - ERROR - Failed to get ticker 'ADANIPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:14,317 - yfinance - ERROR - Failed to get ticker '539195.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:15,381 - yfinance - ERROR - ADANIPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:15,382 - yfinance - ERROR - 539195.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:15,387 - yfinance - ERROR - Failed to get ticker '539195.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:16,268 - yfinance - ERROR - 539195.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:16,284 - yfinance - ERROR - Failed to get ticker '539195.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:17,156 - yfinance - ERROR - 539195.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:17,156 - yfinance - ERROR - Failed to get ticker '539195.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:18,222 - yfinance - ERROR - 539195.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:20,808 - yfinance - ERROR - Failed to get ticker 'HNDFDS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:21,742 - yfinance - ERROR - HNDFDS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:21,742 - yfinance - ERROR - Failed to get ticker 'HNDFDS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:22,779 - yfinance - ERROR - HNDFDS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:22,781 - yfinance - ERROR - Failed to get ticker 'HNDFDS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:23,645 - yfinance - ERROR - HNDFDS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:23,647 - yfinance - ERROR - Failed to get ticker 'HNDFDS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:23,929 - yfinance - ERROR - Failed to get ticker 'TATAPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:24,513 - yfinance - ERROR - HNDFDS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:24,810 - yfinance - ERROR - TATAPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:24,814 - yfinance - ERROR - Failed to get ticker 'TATAPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:25,550 - yfinance - ERROR - TATAPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:25,550 - yfinance - ERROR - Failed to get ticker 'TATAPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:26,251 - yfinance - ERROR - TATAPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:26,253 - yfinance - ERROR - Failed to get ticker 'TATAPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:27,128 - yfinance - ERROR - TATAPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:29,274 - yfinance - ERROR - Failed to get ticker 'HLEGLAS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:30,068 - yfinance - ERROR - HLEGLAS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:30,068 - yfinance - ERROR - Failed to get ticker 'HLEGLAS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:30,869 - yfinance - ERROR - HLEGLAS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:30,869 - yfinance - ERROR - Failed to get ticker 'HLEGLAS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:31,971 - yfinance - ERROR - Failed to get ticker 'FAIRCHEMOR.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:32,178 - yfinance - ERROR - HLEGLAS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:32,181 - yfinance - ERROR - Failed to get ticker 'HLEGLAS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:33,224 - yfinance - ERROR - FAIRCHEMOR.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:33,228 - yfinance - ERROR - Failed to get ticker 'FAIRCHEMOR.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:33,456 - yfinance - ERROR - HLEGLAS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:34,340 - yfinance - ERROR - FAIRCHEMOR.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:34,340 - yfinance - ERROR - Failed to get ticker 'FAIRCHEMOR.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:35,457 - yfinance - ERROR - FAIRCHEMOR.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:35,457 - yfinance - ERROR - Failed to get ticker 'FAIRCHEMOR.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:36,627 - yfinance - ERROR - FAIRCHEMOR.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:38,342 - yfinance - ERROR - Failed to get ticker 'OLAELEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:39,492 - yfinance - ERROR - OLAELEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:39,492 - yfinance - ERROR - Failed to get ticker 'OLAELEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:40,686 - yfinance - ERROR - OLAELEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:40,688 - yfinance - ERROR - Failed to get ticker 'OLAELEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:41,111 - yfinance - ERROR - Failed to get ticker 'KELLTONTEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:41,831 - yfinance - ERROR - OLAELEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:41,831 - yfinance - ERROR - Failed to get ticker 'OLAELEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:42,247 - yfinance - ERROR - KELLTONTEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:42,261 - yfinance - ERROR - Failed to get ticker 'KELLTONTEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:42,950 - yfinance - ERROR - OLAELEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:43,399 - yfinance - ERROR - KELLTONTEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:43,403 - yfinance - ERROR - Failed to get ticker 'KELLTONTEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:44,522 - yfinance - ERROR - KELLTONTEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:44,527 - yfinance - ERROR - Failed to get ticker 'KELLTONTEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:45,864 - yfinance - ERROR - KELLTONTEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:48,672 - yfinance - ERROR - Failed to get ticker 'INTELLECT.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:50,173 - yfinance - ERROR - INTELLECT.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:50,173 - yfinance - ERROR - Failed to get ticker 'INTELLECT.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:50,383 - yfinance - ERROR - Failed to get ticker 'ADANIPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:53,148 - yfinance - ERROR - INTELLECT.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:53,155 - yfinance - ERROR - Failed to get ticker 'INTELLECT.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:53,330 - yfinance - ERROR - ADANIPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:53,339 - yfinance - ERROR - Failed to get ticker 'ADANIPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:54,630 - yfinance - ERROR - INTELLECT.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:54,634 - yfinance - ERROR - Failed to get ticker 'INTELLECT.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:54,776 - yfinance - ERROR - ADANIPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:54,776 - yfinance - ERROR - Failed to get ticker 'ADANIPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:55,929 - yfinance - ERROR - INTELLECT.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:56,080 - yfinance - ERROR - ADANIPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:20:56,086 - yfinance - ERROR - Failed to get ticker 'ADANIPOWER.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:20:57,261 - yfinance - ERROR - ADANIPOWER.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:00,950 - yfinance - ERROR - Failed to get ticker '533576.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:01,988 - yfinance - ERROR - Failed to get ticker 'HNDFDS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:02,236 - yfinance - ERROR - 533576.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:02,239 - yfinance - ERROR - Failed to get ticker '533576.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:03,274 - yfinance - ERROR - HNDFDS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:03,284 - yfinance - ERROR - Failed to get ticker 'HNDFDS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:03,467 - yfinance - ERROR - 533576.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:03,484 - yfinance - ERROR - Failed to get ticker '533576.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:04,752 - yfinance - ERROR - HNDFDS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:04,752 - yfinance - ERROR - Failed to get ticker 'HNDFDS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:05,066 - yfinance - ERROR - 533576.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:05,070 - yfinance - ERROR - Failed to get ticker '533576.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:06,138 - yfinance - ERROR - HNDFDS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:06,138 - yfinance - ERROR - Failed to get ticker 'HNDFDS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:06,464 - yfinance - ERROR - 533576.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:07,623 - yfinance - ERROR - HNDFDS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:13,807 - yfinance - ERROR - Failed to get ticker 'HLEGLAS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:14,899 - yfinance - ERROR - HLEGLAS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:14,912 - yfinance - ERROR - Failed to get ticker 'HLEGLAS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:16,068 - yfinance - ERROR - HLEGLAS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:16,071 - yfinance - ERROR - Failed to get ticker 'HLEGLAS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:17,476 - yfinance - ERROR - HLEGLAS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:17,486 - yfinance - ERROR - Failed to get ticker 'HLEGLAS.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:18,873 - yfinance - ERROR - HLEGLAS.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:23,716 - yfinance - ERROR - Failed to get ticker 'OLAELEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:24,995 - yfinance - ERROR - OLAELEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:25,003 - yfinance - ERROR - Failed to get ticker 'OLAELEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:27,059 - yfinance - ERROR - OLAELEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:27,064 - yfinance - ERROR - Failed to get ticker 'OLAELEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:29,107 - yfinance - ERROR - OLAELEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:29,116 - yfinance - ERROR - Failed to get ticker 'OLAELEC.NS' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:21:30,645 - yfinance - ERROR - OLAELEC.NS: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:21:36,198 - root - INFO - Memory usage: 182.4 MB
+2025-08-27 13:21:43,635 - root - INFO - ==================================================
+2025-08-27 13:21:43,636 - root - INFO - BSE Monitor Application Starting
+2025-08-27 13:21:43,637 - root - INFO - Python: 3.11.9
+2025-08-27 13:21:43,687 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 13:21:43,714 - root - INFO - Memory: 147.47 MB
+2025-08-27 13:21:43,714 - root - INFO - ==================================================
+2025-08-27 13:21:43,891 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 13:22:03,116 - root - INFO - Memory usage: 152.2 MB
+2025-08-27 13:22:03,560 - root - INFO - Memory usage: 153.54 MB
+2025-08-27 13:31:11,901 - root - INFO - ==================================================
+2025-08-27 13:31:11,901 - root - INFO - BSE Monitor Application Starting
+2025-08-27 13:31:11,902 - root - INFO - Python: 3.11.9
+2025-08-27 13:31:11,942 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 13:31:11,960 - root - INFO - Memory: 147.74 MB
+2025-08-27 13:31:11,960 - root - INFO - ==================================================
+2025-08-27 13:31:15,311 - root - INFO - ==================================================
+2025-08-27 13:31:15,311 - root - INFO - BSE Monitor Application Starting
+2025-08-27 13:31:15,311 - root - INFO - Python: 3.11.9
+2025-08-27 13:31:15,370 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 13:31:15,387 - root - INFO - Memory: 147.61 MB
+2025-08-27 13:31:15,396 - root - INFO - ==================================================
+2025-08-27 13:31:15,536 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 13:31:18,082 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.700aef12-889a-491f-928c-21e38bd3d285 "HTTP/1.1 200 OK"
+2025-08-27 13:31:18,198 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.700aef12-889a-491f-928c-21e38bd3d285 "HTTP/1.1 200 OK"
+2025-08-27 13:31:18,318 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.700aef12-889a-491f-928c-21e38bd3d285&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:31:35,432 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/profiles?select=id%2C%20email&google_uid=eq.S3LQw3X9a3UyMZqgnoSdthBRkfG3 "HTTP/1.1 200 OK"
+2025-08-27 13:31:35,482 - httpx - INFO - HTTP Request: PATCH https://sruufdhatrroqfldzyst.supabase.co/rest/v1/profiles?id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 409 Conflict"
+2025-08-27 13:31:35,591 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:31:35,657 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:31:35,716 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:31:55,483 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=user_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&chat_id=eq.8189818595&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:31:55,767 - httpx - INFO - HTTP Request: POST https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients "HTTP/1.1 201 Created"
+2025-08-27 13:31:55,921 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:31:56,047 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:31:56,172 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:32:02,781 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:32:02,904 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:32:03,014 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:32:03,900 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/seen_announcements?select=news_id&news_id=eq.a5fc2e18-2d4f-47e5-87c3-b9fd0354d2bb&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:32:04,024 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:32:04,829 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:32:05,606 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:32:06,437 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:32:08,058 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:32:09,568 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:32:11,136 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:32:15,271 - yfinance - ERROR - Failed to get ticker '539195.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:32:15,967 - yfinance - ERROR - 539195.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:32:15,976 - yfinance - ERROR - Failed to get ticker '539195.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:32:16,654 - yfinance - ERROR - 539195.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:32:16,674 - yfinance - ERROR - Failed to get ticker '539195.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:32:17,389 - yfinance - ERROR - 539195.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:32:17,409 - yfinance - ERROR - Failed to get ticker '539195.BO' reason: Expecting value: line 1 column 1 (char 0)
+2025-08-27 13:32:18,080 - yfinance - ERROR - 539195.BO: No price data found, symbol may be delisted (period=1d)
+2025-08-27 13:32:28,341 - httpx - INFO - HTTP Request: POST https://sruufdhatrroqfldzyst.supabase.co/rest/v1/seen_announcements "HTTP/1.1 201 Created"
+2025-08-27 13:32:28,594 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:32:28,663 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/telegram_recipients?select=chat_id&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:32:28,711 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/bse_category_prefs?select=categories&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf&limit=1 "HTTP/1.1 200 OK"
+2025-08-27 13:32:52,302 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:32:53,303 - httpx - INFO - HTTP Request: GET https://sruufdhatrroqfldzyst.supabase.co/rest/v1/monitored_scrips?select=bse_code%2C%20company_name&user_id=eq.877ec22a-df31-4bf3-86b1-1b76e4293abf "HTTP/1.1 200 OK"
+2025-08-27 13:39:41,913 - root - INFO - Memory usage: 212.43 MB
+2025-08-27 13:39:46,119 - root - INFO - ==================================================
+2025-08-27 13:39:46,120 - root - INFO - BSE Monitor Application Starting
+2025-08-27 13:39:46,121 - root - INFO - Python: 3.11.9
+2025-08-27 13:39:46,158 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 13:39:46,173 - root - INFO - Memory: 147.61 MB
+2025-08-27 13:39:46,174 - root - INFO - ==================================================
+2025-08-27 13:39:46,279 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 13:40:22,183 - root - INFO - Memory usage: 152.32 MB
+2025-08-27 13:40:27,100 - root - INFO - ==================================================
+2025-08-27 13:40:27,101 - root - INFO - BSE Monitor Application Starting
+2025-08-27 13:40:27,101 - root - INFO - Python: 3.11.9
+2025-08-27 13:40:27,146 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 13:40:27,167 - root - INFO - Memory: 147.31 MB
+2025-08-27 13:40:27,168 - root - INFO - ==================================================
+2025-08-27 13:40:27,374 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 13:40:34,668 - root - INFO - Memory usage: 152.52 MB
+2025-08-27 13:40:38,355 - root - INFO - ==================================================
+2025-08-27 13:40:38,355 - root - INFO - BSE Monitor Application Starting
+2025-08-27 13:40:38,355 - root - INFO - Python: 3.11.9
+2025-08-27 13:40:38,395 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 13:40:38,413 - root - INFO - Memory: 147.88 MB
+2025-08-27 13:40:38,413 - root - INFO - ==================================================
+2025-08-27 13:40:38,540 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 13:40:48,844 - root - INFO - Memory usage: 152.77 MB
+2025-08-27 13:40:53,146 - root - INFO - ==================================================
+2025-08-27 13:40:53,147 - root - INFO - BSE Monitor Application Starting
+2025-08-27 13:40:53,147 - root - INFO - Python: 3.11.9
+2025-08-27 13:40:53,200 - root - INFO - Platform: Windows-10-10.0.19045-SP0
+2025-08-27 13:40:53,225 - root - INFO - Memory: 147.5 MB
+2025-08-27 13:40:53,227 - root - INFO - ==================================================
+2025-08-27 13:40:53,399 - werkzeug - WARNING -  * Debugger is active!
+2025-08-27 13:40:56,540 - root - INFO - Memory usage: 152.65 MB
+2025-08-27 13:42:49,575 - root - INFO - Memory usage: 151.33 MB
