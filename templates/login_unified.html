@@ -30,7 +30,7 @@
         <div id="message-area" class="mb-4 text-sm"></div>
 
         <!-- Sign in with Google Button -->
-        <button id="google-login-btn" class="w-full bg-white border border-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-50 flex items-center justify-center mb-4 font-semibold transition-colors">
+        <button id="google-login-btn" class="w-full bg-white border border-gray-300 text-gray-700 p-3 rounded-lg hover:bg-gray-50 flex items-center justify-center mb-4 font-semibold transition-colors opacity-50 cursor-not-allowed" disabled>
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo" class="w-5 h-5 mr-3">
             Sign in with Google
         </button>
@@ -46,7 +46,7 @@
         <div id="phone-entry">
             <input id="phone-number" type="tel" placeholder="+91 12345 67890" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
             <div id="recaptcha-container"></div>
-            <button id="send-otp-btn" class="btn-primary bg-blue-500 hover:bg-blue-600">Sign in with Phone</button>
+            <button id="send-otp-btn" class="btn-primary bg-blue-500 hover:bg-blue-600 opacity-50 cursor-not-allowed" disabled>Sign in with Phone</button>
         </div>
 
         <!-- Step 2: Enter OTP -->
@@ -58,14 +58,73 @@
     </div>
 
     <script>
-        // --- IMPORTANT: Replace with your Firebase project's configuration ---
-        const firebaseConfig = {
-            // It's recommended to load this from your backend or environment variables in production
+        // --- SECURE: Load Firebase config from backend ---
+        let firebaseApp = null;
+        let auth = null;
+        
+        // Initialize Firebase when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeFirebase();
+        });
+        
+        async function initializeFirebase() {
+            try {
+                showMessage('Loading...', 'blue');
+                
+                // Fetch Firebase configuration from backend
+                const response = await fetch('/firebase-config');
+                const firebaseConfig = await response.json();
+                
+                if (!response.ok || firebaseConfig.error) {
+                    throw new Error(firebaseConfig.error || 'Failed to load Firebase configuration');
+                }
+                
+                // Initialize Firebase with the loaded config
+                firebaseApp = firebase.initializeApp(firebaseConfig);
+                auth = firebase.auth();
+                
+                // Setup reCAPTCHA verifier for phone auth
+                window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+                    'size': 'invisible'
+                });
+                
+                // Enable login buttons after Firebase is initialized
+                enableLoginButtons();
+                clearMessage();
+                
+            } catch (error) {
+                console.error('Firebase initialization failed:', error);
+                showMessage(`Firebase initialization failed: ${error.message}`, 'red');
+                // Disable login buttons if Firebase fails to initialize
+                disableLoginButtons();
+            }
+        }
+        
+        function enableLoginButtons() {
+            const googleLoginBtn = document.getElementById('google-login-btn');
+            const sendOtpBtn = document.getElementById('send-otp-btn');
             
-        };
-        firebase.initializeApp(firebaseConfig);
-
-        const auth = firebase.auth();
+            googleLoginBtn.disabled = false;
+            sendOtpBtn.disabled = false;
+            googleLoginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            sendOtpBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        
+        function disableLoginButtons() {
+            const googleLoginBtn = document.getElementById('google-login-btn');
+            const sendOtpBtn = document.getElementById('send-otp-btn');
+            
+            googleLoginBtn.disabled = true;
+            sendOtpBtn.disabled = true;
+            googleLoginBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            sendOtpBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+        
+        function clearMessage() {
+            const messageArea = document.getElementById('message-area');
+            messageArea.innerHTML = '';
+        }
+        // Get DOM elements
         const googleLoginBtn = document.getElementById('google-login-btn');
         const phoneEntryDiv = document.getElementById('phone-entry');
         const otpEntryDiv = document.getElementById('otp-entry');
@@ -75,13 +134,13 @@
         const verifyOtpBtn = document.getElementById('verify-otp-btn');
         const messageArea = document.getElementById('message-area');
 
-        // Setup reCAPTCHA verifier for phone auth
-        window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-            'size': 'invisible'
-        });
-
         // --- Google Login Logic ---
         googleLoginBtn.addEventListener('click', () => {
+            if (!auth) {
+                showMessage('Firebase not initialized. Please refresh the page.', 'red');
+                return;
+            }
+            
             const provider = new firebase.auth.GoogleAuthProvider();
             provider.addScope('email');
             provider.addScope('profile');
@@ -93,6 +152,11 @@
 
         // --- Phone Login Logic ---
         sendOtpBtn.addEventListener('click', () => {
+            if (!auth) {
+                showMessage('Firebase not initialized. Please refresh the page.', 'red');
+                return;
+            }
+            
             const phoneNumber = phoneNumberInput.value;
             if (!phoneNumber) {
                 showMessage('Please enter a phone number.', 'red');
@@ -163,4 +227,3 @@
     </script>
 </body>
 </html>
-
