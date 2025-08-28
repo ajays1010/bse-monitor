@@ -273,10 +273,6 @@ def cron_master():
                 'reason': f'Outside market hours or non-working day. Market: {is_market_hours}, Working day: {is_working_day}'
             })
         
-        # 3. DAILY SUMMARY - Once per day at 16:30 (after market close)
-        summary_time_target = now_ist.replace(hour=16, minute=30, second=0, microsecond=0)
-        time_diff = abs((now_ist - summary_time_target).total_seconds() / 60)  # difference in minutes
-        
         # Run daily summary if:
         # - It's a working day
         # - Current time is within 10 minutes of 16:30 (16:25-16:35)
@@ -315,6 +311,43 @@ def cron_master():
                 'name': 'daily_summary', 
                 'reason': f'Not scheduled time. Current: {now_ist.strftime("%H:%M")}, Target: 16:30 (±10min)'
             })
+        
+        # Run daily summary if:
+        # - It's a working day
+        # - Current time is within 10 minutes of 16:30 (16:25-16:35)
+        # - Haven't run it today already
+        should_run_summary = (
+            is_working_day and 
+            time_diff <= 10 and 
+            now_ist >= summary_time_target.replace(minute=25)  # After 16:25
+        )
+        
+        if should_run_summary:
+            # Check if already run today
+            today_start = now_ist.replace(hour=0, minute=0, second=0, microsecond=0)
+            try:
+                existing_runs = sb.table('cron_run_logs').select('created_at').eq('job', 'daily_summary').gte('created_at', today_start.isoformat()).execute()
+                if existing_runs.data:
+                    results['skipped_jobs'].append({
+                        'name': 'daily_summary',
+                        'reason': 'Already executed today'
+                    })
+                else:
+                    jobs_to_run.append({
+                        'name': 'daily_summary',
+                        'condition': True,
+                        'reason': f'Scheduled time reached: {now_ist.strftime("%H:%M")}'
+                    })
+            except Exception:
+                # If we can't check, run anyway to be safe
+                jobs_to_run.append({
+                    'name': 'daily_summary',
+                    'condition': True,
+                    'reason': 'Scheduled time reached (could not verify if already run)'
+                })
+        # 3. DAILY SUMMARY - Once per day at 16:30 (after market close)
+        summary_time_target = now_ist.replace(hour=16, minute=30, second=0, microsecond=0)
+        time_diff = abs((now_ist - summary_time_target).total_seconds() / 60)  # difference in minutes
         
         # Execute the jobs
         if not jobs_to_run:
@@ -370,6 +403,10 @@ def cron_master():
                             sent = db.send_hourly_spike_alerts(sb, uid, scrips, recipients)
                         elif job_name == 'daily_summary':
                             sent = db.send_script_messages_to_telegram(sb, uid, scrips, recipients)
+                        elif job_name == 'bulk_deals_monitoring':
+                            # Import and use bulk deals monitoring
+                            from bulk_deals_monitor import send_bulk_deals_alerts
+                            sent = send_bulk_deals_alerts(sb, uid, scrips, recipients)
                         else:
                             continue
                         
