@@ -22,9 +22,29 @@ services:
         sync: false
       - key: CRON_SECRET_KEY
         sync: false
+      # Firebase Admin SDK Configuration
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      # Firebase Client Configuration (for frontend)
+      - key: FIREBASE_API_KEY
+        sync: false
+      - key: FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: FIREBASE_APP_ID
+        sync: false
+      # AI Configuration
+      - key: GEMINI_API_KEY
+        sync: false
+      # Performance Tuning
       - key: YAHOO_CACHE_TTL
         value: "60"
-        - key: YAHOO_VERBOSE
+      - key: YAHOO_VERBOSE
         value: "0"
       - key: BSE_VERBOSE
         value: "1"
@@ -62,6 +82,7 @@ services:
     envVars:
       - key: CRON_SECRET_KEY
         sync: false
+
 
 
 
