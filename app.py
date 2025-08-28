@@ -175,11 +175,234 @@ def _process_firebase_token():
         # Catch specific Firebase auth errors if needed, otherwise generic
         return jsonify({"success": False, "error": f"An unexpected error occurred: {str(e)}"}), 500
 
+# --- Firebase Config Endpoint (for frontend) ---
+@app.route('/firebase-config')
+def get_firebase_config():
+    """Serve Firebase configuration from environment variables."""
+    try:
+        config = {
+            'apiKey': os.environ.get('FIREBASE_API_KEY', ''),
+            'authDomain': os.environ.get('FIREBASE_AUTH_DOMAIN', ''),
+            'projectId': os.environ.get('FIREBASE_PROJECT_ID', ''),
+            'storageBucket': os.environ.get('FIREBASE_STORAGE_BUCKET', ''),
+            'messagingSenderId': os.environ.get('FIREBASE_MESSAGING_SENDER_ID', ''),
+            'appId': os.environ.get('FIREBASE_APP_ID', '')
+        }
+        
+        # Validate that all required config values are present
+        missing_keys = [key for key, value in config.items() if not value]
+        if missing_keys:
+            return jsonify({
+                'error': f'Missing Firebase configuration: {", ".join(missing_keys)}'
+            }), 500
+        
+        return jsonify(config)
+    except Exception as e:
+        return jsonify({'error': f'Failed to load Firebase config: {str(e)}'}), 500
+
 # --- Authentication Routes ---
 @app.route('/login')
 def login():
     """Renders the new unified login page."""
     return render_template('login_unified.html')
+
+@app.route('/cron/master')
+@log_errors
+def cron_master():
+    """
+    UNIFIED CRON MASTER CONTROLLER
+    
+    Single endpoint that intelligently handles all three monitoring types:
+    1. Live price monitoring (every 5min during market hours 9:00-15:30)
+    2. BSE announcements (every 5min continuously)
+    3. Daily summary (once at 16:30 on working days)
+    
+    Designed for single UptimeRobot trigger every 5 minutes.
+    """
+    key = request.args.get('key')
+    expected = os.environ.get('CRON_SECRET_KEY')
+    if not expected or key != expected:
+        return "Unauthorized", 403
+
+    # Always use service client for cron
+    sb = db.get_supabase_client(service_role=True)
+    if not sb:
+        return "Supabase not configured", 500
+
+    try:
+        from datetime import datetime, timedelta
+        import uuid
+        
+        # Get current IST time and market status
+        now_ist = db.ist_now()
+        is_market_hours, market_open, market_close = db.ist_market_window(now_ist)
+        is_working_day = now_ist.weekday() < 5  # Monday=0, Friday=4
+        
+        # Initialize response
+        run_id = str(uuid.uuid4())
+        results = {
+            'timestamp': now_ist.isoformat(),
+            'run_id': run_id,
+            'market_hours': is_market_hours,
+            'working_day': is_working_day,
+            'executed_jobs': [],
+            'skipped_jobs': [],
+            'errors': []
+        }
+        
+        # Job execution flags
+        jobs_to_run = []
+        
+        # 1. BSE ANNOUNCEMENTS - Always run (every 5 minutes, 24/7)
+        jobs_to_run.append({
+            'name': 'bse_announcements',
+            'condition': True,  # Always run
+            'reason': 'Continuous monitoring'
+        })
+        
+        # 2. LIVE PRICE MONITORING - Only during market hours on working days
+        if is_working_day and is_market_hours:
+            jobs_to_run.append({
+                'name': 'live_price_monitoring', 
+                'condition': True,
+                'reason': f'Market hours: {market_open.strftime("%H:%M")} - {market_close.strftime("%H:%M")}'
+            })
+        else:
+            results['skipped_jobs'].append({
+                'name': 'live_price_monitoring',
+                'reason': f'Outside market hours or non-working day. Market: {is_market_hours}, Working day: {is_working_day}'
+            })
+        
+        # 3. DAILY SUMMARY - Once per day at 16:30 (after market close)
+        summary_time_target = now_ist.replace(hour=16, minute=30, second=0, microsecond=0)
+        time_diff = abs((now_ist - summary_time_target).total_seconds() / 60)  # difference in minutes
+        
+        # Run daily summary if:
+        # - It's a working day
+        # - Current time is within 10 minutes of 16:30 (16:25-16:35)
+        # - Haven't run it today already
+        should_run_summary = (
+            is_working_day and 
+            time_diff <= 10 and 
+            now_ist >= summary_time_target.replace(minute=25)  # After 16:25
+        )
+        
+        if should_run_summary:
+            # Check if already run today
+            today_start = now_ist.replace(hour=0, minute=0, second=0, microsecond=0)
+            try:
+                existing_runs = sb.table('cron_run_logs').select('created_at').eq('job', 'daily_summary').gte('created_at', today_start.isoformat()).execute()
+                if existing_runs.data:
+                    results['skipped_jobs'].append({
+                        'name': 'daily_summary',
+                        'reason': 'Already executed today'
+                    })
+                else:
+                    jobs_to_run.append({
+                        'name': 'daily_summary',
+                        'condition': True,
+                        'reason': f'Scheduled time reached: {now_ist.strftime("%H:%M")}'
+                    })
+            except Exception:
+                # If we can't check, run anyway to be safe
+                jobs_to_run.append({
+                    'name': 'daily_summary',
+                    'condition': True,
+                    'reason': 'Scheduled time reached (could not verify if already run)'
+                })
+        else:
+            results['skipped_jobs'].append({
+                'name': 'daily_summary', 
+                'reason': f'Not scheduled time. Current: {now_ist.strftime("%H:%M")}, Target: 16:30 (±10min)'
+            })
+        
+        # Execute the jobs
+        if not jobs_to_run:
+            results['message'] = 'No jobs scheduled for execution'
+            return jsonify(results)
+        
+        # Get user data once
+        scrip_rows = sb.table('monitored_scrips').select('user_id, bse_code, company_name').execute().data or []
+        rec_rows = sb.table('telegram_recipients').select('user_id, chat_id').execute().data or []
+        
+        # Build maps by user
+        scrips_by_user = {}
+        for r in scrip_rows:
+            uid = r.get('user_id')
+            if not uid:
+                continue
+            scrips_by_user.setdefault(uid, []).append({
+                'bse_code': r.get('bse_code'), 
+                'company_name': r.get('company_name')
+            })
+
+        recs_by_user = {}
+        for r in rec_rows:
+            uid = r.get('user_id')
+            if not uid:
+                continue
+            recs_by_user.setdefault(uid, []).append({'chat_id': r.get('chat_id')})
+        
+        # Execute each job
+        for job in jobs_to_run:
+            job_name = job['name']
+            job_result = {
+                'name': job_name,
+                'reason': job['reason'],
+                'users_processed': 0,
+                'notifications_sent': 0,
+                'users_skipped': 0,
+                'errors': []
+            }
+            
+            try:
+                for uid, scrips in scrips_by_user.items():
+                    recipients = recs_by_user.get(uid) or []
+                    if not scrips or not recipients:
+                        job_result['users_skipped'] += 1
+                        continue
+                    
+                    try:
+                        # Execute appropriate function based on job type
+                        if job_name == 'bse_announcements':
+                            sent = db.send_bse_announcements_consolidated(sb, uid, scrips, recipients, hours_back=1)
+                        elif job_name == 'live_price_monitoring':
+                            sent = db.send_hourly_spike_alerts(sb, uid, scrips, recipients)
+                        elif job_name == 'daily_summary':
+                            sent = db.send_script_messages_to_telegram(sb, uid, scrips, recipients)
+                        else:
+                            continue
+                        
+                        job_result['users_processed'] += 1
+                        job_result['notifications_sent'] += sent
+                        
+                        # Log individual job execution
+                        try:
+                            user_uuid = uid if uid and len(uid) == 36 and '-' in uid else None
+                            sb.table('cron_run_logs').insert({
+                                'run_id': run_id,
+                                'job': job_name,
+                                'user_id': user_uuid,
+                                'processed': True,
+                                'notifications_sent': int(sent),
+                                'recipients': int(len(recipients))
+                            }).execute()
+                        except Exception as log_error:
+                            job_result['errors'].append(f"Log error for user {uid}: {log_error}")
+                            
+                    except Exception as user_error:
+                        job_result['errors'].append({"user_id": uid, "error": str(user_error)})
+                        job_result['users_skipped'] += 1
+                
+                results['executed_jobs'].append(job_result)
+                
+            except Exception as job_error:
+                results['errors'].append(f"Job {job_name} failed: {str(job_error)}")
+        
+        return jsonify(results)
+        
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "timestamp": datetime.now().isoformat()}), 500
 
 @app.route('/cron/bse_announcements')
 @app.route('/cron/hourly_spike_alerts')

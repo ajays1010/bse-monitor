@@ -81,13 +81,17 @@ def analyze_pdf_bytes_with_gemini(pdf_bytes: bytes, pdf_name: str, scrip_code: s
                 logger.error("File processing failed")
                 return None
             
-            # Create the enhanced prompt for financial analysis with quarterly results support
+            # Create the enhanced prompt for financial analysis with support for all announcement types
             analysis_prompt = f"""
 You are a financial analyst expert specializing in Indian stock market and BSE/NSE listed companies.
 Analyze this PDF document (filename: {pdf_name}) and provide a comprehensive financial analysis.
 
 Company Information:
 - Scrip Code: {scrip_code if scrip_code else 'Not provided'}
+
+🎯 DOCUMENT TYPE DETECTION:
+• First determine the document type based on content and title
+• Types: quarterly_results, annual_report, board_meeting, dividend_announcement, rating_change, rights_issue, agm_notice, investor_presentation, other
 
 🎯 CRITICAL FOR QUARTERLY RESULTS:
 • FIND the section with heading 'UNAUDITED CONSOLIDATED FINANCIAL RESULT' (any page)
@@ -100,11 +104,19 @@ Company Information:
 • Calculate growth percentages: ((Current-Previous)/Previous)*100
 • If document is NOT quarterly results, set quarterly_financials to null
 
+🎯 FOR NON-QUARTERLY ANNOUNCEMENTS:
+• Board Meeting: Extract decisions, resolutions, key agenda items
+• Dividend: Extract dividend amount, record date, payment date, yield
+• Rating: Extract new rating, previous rating, rationale, outlook
+• Rights Issue: Extract issue price, ratio, record date, premium/discount
+• AGM: Extract key resolutions, voting results, important decisions
+• Other: Extract key business impact, financial implications
+
 Please analyze the document and provide a JSON response with the following structure:
 {{
     "company_name": "Company name from document",
     "scrip_code": "BSE/NSE code if found in document",
-    "document_type": "quarterly_results/annual_report/investor_presentation/other",
+    "document_type": "quarterly_results/board_meeting/dividend_announcement/rating_change/rights_issue/agm_notice/annual_report/investor_presentation/other",
     "announcement_title": "Title of the announcement/document",
     "current_stock_price": "Current stock price if mentioned",
     "price_change": "Price change information",
@@ -130,6 +142,10 @@ Please analyze the document and provide a JSON response with the following struc
             "pbt_growth_yoy_percent": "Year-over-year PBT growth if available"
         }}
     }},
+    "financial_summary": "Brief summary of financial impact/key financial metrics",
+    "business_impact": "How this announcement affects business operations",
+    "market_implications": "Expected impact on stock price and market perception",
+    "risk_assessment": "Key risks and opportunities from this announcement",
     "key_financials": {{
         "revenue": "Revenue figures",
         "profit": "Profit/loss information", 
@@ -147,15 +163,24 @@ Please analyze the document and provide a JSON response with the following struc
     "web_insights": "Additional market insights",
     "price_momentum": "Expected price momentum",
     "motive_and_meaning": "Management intentions and document significance",
+    "gist": "Key takeaway for investors (1-2 sentences)",
     "tldr": "Brief summary of key points"
 }}
 
 Focus on:
-1. Financial performance metrics
+1. Financial performance metrics (if applicable)
 2. Business developments and strategic initiatives
 3. Market impact and investor sentiment
 4. Risk factors and opportunities
 5. Regulatory compliance and corporate governance
+6. Specific analysis based on announcement type
+
+For quarterly results: Focus on growth trends, margins, and financial health
+For board meetings: Focus on strategic decisions and their business impact
+For dividends: Focus on yield, payout ratio, and sustainability
+For ratings: Focus on credit quality and business outlook
+For rights issues: Focus on dilution impact and use of proceeds
+For AGMs: Focus on governance and strategic direction
 
 Provide actionable insights for retail and institutional investors.
 """
@@ -371,7 +396,7 @@ except ImportError:
                 return datetime.datetime.now()
 
 
-def format_structured_telegram_message(analysis: Dict[str, Any], scrip_code: str, announcement_title: str, ann_date_ist) -> str:
+def format_structured_telegram_message(analysis: Dict[str, Any], scrip_code: str, announcement_title: str, ann_date_ist, is_quarterly: bool = False) -> str:
     """Format the Telegram message according to the requested structure"""
     from datetime import datetime
     
@@ -417,8 +442,8 @@ def format_structured_telegram_message(analysis: Dict[str, Any], scrip_code: str
             f"💹 ₹{price_display} {price_change}" if price_display != "N/A" else "",
         ]
         
-        # Add quarterly results section if available
-        if doc_type == "quarterly_results" and quarterly_data:
+        # Add quarterly results section if this is a quarterly document AND has quarterly data
+        if is_quarterly and (doc_type == "quarterly_results" or quarterly_data):
             message_parts.append("\n📈 QUARTERLY RESULTS ANALYSIS:")
             
             current_q = quarterly_data.get("current_quarter", {})
@@ -501,6 +526,33 @@ def format_structured_telegram_message(analysis: Dict[str, Any], scrip_code: str
                 except Exception:
                     # If price comparison fails, continue without it
                     pass
+        else:
+            # For non-quarterly announcements, add generic AI analysis section
+            if not is_quarterly:
+                announcement_type = analysis.get("document_type", "Corporate Announcement").title()
+                
+                # Add announcement type specific section
+                message_parts.append(f"\n📋 {announcement_type.upper()} ANALYSIS:")
+                
+                # Add key financial metrics if available
+                financial_summary = analysis.get("financial_summary", "")
+                if financial_summary:
+                    message_parts.append(f"\n💰 Financial Impact: {financial_summary}")
+                
+                # Add business impact
+                business_impact = analysis.get("business_impact", "")
+                if business_impact:
+                    message_parts.append(f"\n🏭 Business Impact: {business_impact}")
+                
+                # Add market implications
+                market_impact = analysis.get("market_implications", "")
+                if market_impact:
+                    message_parts.append(f"\n📈 Market Implications: {market_impact}")
+                
+                # Add risk assessment if available
+                risk_factors = analysis.get("risk_assessment", "")
+                if risk_factors:
+                    message_parts.append(f"\n⚠️ Risk Factors: {risk_factors}")
         
         # Add AI recommendation
         recommendation = analysis.get("investment_recommendation", "")

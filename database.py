@@ -1351,28 +1351,43 @@ def send_bse_announcements_consolidated(user_client, user_id: str, monitored_scr
                 try:
                     from ai_service import is_quarterly_results_document, analyze_pdf_bytes_with_gemini, format_structured_telegram_message
                     
-                    is_quarterly = is_quarterly_results_document(item.get('category', ''), item.get('headline', ''))
+                    is_quarterly = is_quarterly_results_document(item.get('headline', ''), item.get('category', ''))
                     
-                    if is_quarterly:
-                        # Try AI analysis for quarterly results
-                        try:
-                            analysis_result = analyze_pdf_bytes_with_gemini(
-                                resp.content, 
-                                item['pdf_name'], 
-                                str(item['scrip_code'])
+                    if os.environ.get('BSE_VERBOSE', '0') == '1':
+                        print(f"AI: Checking {item['pdf_name']} - headline: '{item.get('headline', '')}', category: '{item.get('category', '')}', is_quarterly: {is_quarterly}")
+                    
+                    # ALWAYS run AI analysis for ALL announcements
+                    try:
+                        if os.environ.get('BSE_VERBOSE', '0') == '1':
+                            print(f"AI: Starting analysis for {item['pdf_name']} (category: {item.get('category', 'unknown')})...")
+                        
+                        analysis_result = analyze_pdf_bytes_with_gemini(
+                            resp.content, 
+                            item['pdf_name'], 
+                            str(item['scrip_code'])
+                        )
+                        
+                        if analysis_result:
+                            if os.environ.get('BSE_VERBOSE', '0') == '1':
+                                print(f"AI: Analysis successful for {item['pdf_name']}, generating message...")
+                            
+                            # Send AI-analyzed message first
+                            ai_message = format_structured_telegram_message(
+                                analysis_result,
+                                str(item['scrip_code']),
+                                item['headline'],
+                                item['ann_dt'],
+                                is_quarterly  # Pass quarterly flag for special formatting
                             )
                             
-                            if analysis_result:
-                                # Send AI-analyzed message first
-                                ai_message = format_structured_telegram_message(
-                                    analysis_result,
-                                    str(item['scrip_code']),
-                                    item['headline'],
-                                    item['ann_dt']
-                                )
-                                
-                                for rec in telegram_recipients:
-                                    requests.post(
+                            if os.environ.get('BSE_VERBOSE', '0') == '1':
+                                print(f"AI: Sending summary to {len(telegram_recipients)} recipients...")
+                                print(f"AI: Message preview: {ai_message[:200]}...")
+                            
+                            messages_sent_count = 0
+                            for rec in telegram_recipients:
+                                try:
+                                    response = requests.post(
                                         f"{TELEGRAM_API_URL}/sendMessage", 
                                         json={
                                             'chat_id': rec['chat_id'], 
@@ -1381,14 +1396,37 @@ def send_bse_announcements_consolidated(user_client, user_id: str, monitored_scr
                                         }, 
                                         timeout=10
                                     )
-                        except Exception as ai_error:
-                            # If AI analysis fails, continue with regular PDF sending
+                                    if response.status_code == 200:
+                                        result = response.json()
+                                        if result.get('ok'):
+                                            messages_sent_count += 1
+                                            if os.environ.get('BSE_VERBOSE', '0') == '1':
+                                                print(f"AI: Successfully sent summary to {rec['chat_id']}")
+                                        else:
+                                            print(f"AI: Telegram API error for {rec['chat_id']}: {result.get('description', 'Unknown error')}")
+                                    else:
+                                        print(f"AI: HTTP error {response.status_code} for {rec['chat_id']}: {response.text}")
+                                except Exception as send_error:
+                                    print(f"AI: Error sending to {rec['chat_id']}: {send_error}")
+                            
                             if os.environ.get('BSE_VERBOSE', '0') == '1':
-                                print(f"AI analysis failed for {item['pdf_name']}: {ai_error}")
-                            pass
-                except ImportError:
+                                print(f"AI: Summary sent to {messages_sent_count}/{len(telegram_recipients)} recipients")
+                        else:
+                            if os.environ.get('BSE_VERBOSE', '0') == '1':
+                                print(f"AI: Analysis returned no results for {item['pdf_name']}")
+                    except Exception as ai_error:
+                        # If AI analysis fails, continue with regular PDF sending
+                        print(f"AI: Analysis failed for {item['pdf_name']}: {ai_error}")
+                        if os.environ.get('BSE_VERBOSE', '0') == '1':
+                            import traceback
+                            traceback.print_exc()
+                except ImportError as import_error:
                     # AI service not available, continue with regular processing
-                    pass
+                    if os.environ.get('BSE_VERBOSE', '0') == '1':
+                        print(f"AI: Import error - {import_error}")
+                except Exception as outer_error:
+                    # Unexpected error in AI processing
+                    print(f"AI: Unexpected error processing {item['pdf_name']}: {outer_error}")
                 
                 # Send PDF document (always, regardless of AI analysis)
                 for rec in telegram_recipients:
